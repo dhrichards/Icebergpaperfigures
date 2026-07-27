@@ -70,8 +70,6 @@ model.params.dt.value = args.dt*24*60*60
 model.params.Kic.value = args.Kic*1e3
 model.params.patm.value = 0.0
 model.params.crack_level_above_sea.value = args.level
-model.params.sea_level.value = args.sealevel * args.height
-model.params.length.value = args.nondim_length * args.height
 
 model.params.σt = args.strength0*1e3 - args.strength_deg*1e3*(model.params.T)
 

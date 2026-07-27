@@ -75,8 +75,6 @@ model.params.dt.value = 2.5*24*60*60
 model.params.Kic.value = 100*1e3
 model.params.patm.value = 0.0
 model.params.crack_level_above_sea.value = 0.0
-model.params.sea_level.value = 0.9 * args.height
-model.params.length.value = nondim_length * args.height
 model.params.σt.value = 200e3
 
 
