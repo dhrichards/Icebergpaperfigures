@@ -69,8 +69,7 @@ for i, ax in zip(itstoplot, axs):
     model.params.Kic.value = Kic*1e3
     model.params.patm.value = 0.0
     model.params.crack_level_above_sea.value = level
-    model.params.sea_level.value = 0.9*H
-    model.params.length.value =  L * H
+
 
     model.params.σc = strength0*1e3 - strength_deg*1e3*(model.params.T)
 
@@ -116,8 +115,8 @@ for i, ax in zip(itstoplot, axs):
 
     for a in [ax,axins]:
     # Plot all in one go with a single label
-        a.plot(*get_outline(msh0), lw=0.5, color=lightgrey,label='Initial outline',alpha=0.75)
-        a.plot(*get_outline(msh), lw=0.5,color=darkgrey,label=r'Displacement')
+        a.plot(*get_outline(msh0), lw=0.5, color=lightgrey,label='Outline at $t=0$',alpha=1)
+        a.plot(*get_outline(msh), lw=0.5,color=darkgrey,label=r'Outline')
         
         
         a.plot([0,X[ind]],[0.9,0.9], lw=0.5, color='k', linestyle = '--', label='Sea level')
@@ -165,7 +164,7 @@ for i, ax in zip(itstoplot, axs):
     #hide axes
     ax.axis('off')
 
-    ax.set_xlim([L-1.5,L+1.5])
+    ax.set_xlim([L-2,L+2])
     ax.set_ylim([-0.01,1.01])
 
     
