@@ -123,7 +123,7 @@ model.damage_on = False
 
 
 if args.relax_time > 0:
-    nt = 10
+    nt = 40
     model.params.dt.value = args.relax_time*24*60*60 / nt
     for i in range(nt):
         if MPI.COMM_WORLD.rank == 0:
@@ -178,7 +178,7 @@ for i in range(1,args.nt):
 
     A = mf.rate_factor(model.params.T)/model.params.A0
 
-    η0 = mf.viscosity(ufl.dev(mf.ε(model.momentum.vel_prev_it)), 3.0, model.params.viscosity_tol, A=A)
+    η0 = mf.viscosity(ufl.dev(mf.ε(model.momentum.vel_prev_it)), 3.0, 1e-10, A=A)
 
 
     if i ==1 or i % 10 == 0 or flag == -1 or nits > 6:
@@ -206,7 +206,7 @@ for i in range(1,args.nt):
                                         "du_smooth_minus_du",
                                         ],
                                     t=i)
-    
+        
     if flag == -1:
         break
 
