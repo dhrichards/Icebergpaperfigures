@@ -53,8 +53,8 @@ fail_its_divuvnew = [1119,543,304,178,109,67]
 fail_t_divuvnew = (np.array(fail_its_divuvnew))*dt
 
 
-heights_neweta = [300,400,450,500,550]
-fail_its_neweta = [432,117,69,40,24]
+heights_neweta = [300,350,400,450,500,550]
+fail_its_neweta = [432,213,117,69,40,24]
 fail_t_neweta = (np.array(fail_its_neweta))*dt
 
 fig, ax = plt.subplots(1,1,figsize=(4,4))
