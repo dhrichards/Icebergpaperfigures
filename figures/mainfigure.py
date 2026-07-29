@@ -26,8 +26,7 @@ lightgrey = "#cccccc"
 
 
 # filename = f'icebergsymm_L5.0_H500.0_l0.005_dt2.5_relaxt400.0_sigmacdeg0.0_sigmac0200_level0.0_Kic100_cellfactor1.0_Ttop5.0_Tbot5.0_lfactor2.0__.bp'
-filename = f'iceshelf_L5.0_H500.0_l0.005_dt2.5_relaxt400.0_sigmacdeg0.0_sigmac0200_level0.0_Kic100_cellfactor1.0_Ttop5.0_Tbot5.0_lfactor2.0_duv_.bp'
-
+filename = f'iceshelf_L5.0_H500.0_l0.005_dt2.5_relaxt200.0_sigmacdeg0.0_sigmac0200_level0.0_Kic100_cellfactor1.0_Ttop10.0_Tbot10.0_lfactor2.0__.bp'
 # extract attributes fromf filename
 L = float(filename.split('L')[1].split('_')[0])
 H = float(filename.split('H')[1].split('_')[0])

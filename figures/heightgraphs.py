@@ -52,11 +52,16 @@ heights_divuvnew = [300,350,400,450,500,550]
 fail_its_divuvnew = [1119,543,304,178,109,67]
 fail_t_divuvnew = (np.array(fail_its_divuvnew))*dt
 
+
+heights_neweta = [300,400,450,500,550]
+fail_its_neweta = [432,117,69,40,24]
+fail_t_neweta = (np.array(fail_its_neweta))*dt
+
 fig, ax = plt.subplots(1,1,figsize=(4,4))
 
-for h,t,label in zip([heights, heightsL10, heightsdt5, heightsl0075, heights_nosmooth, heights_divuvnew],
-             [fail_t, fail_tL10, fail_tdt5, fail_tl0075, fail_t_nosmooth, fail_t_divuvnew],
-             ['Runs', 'Runs with L=10', 'Runs with dt=5', 'Runs with l=0.0075', 'Runs with no smoothing', 'Runs with divUvNew']):
+for h,t,label in zip([heights, heightsL10, heightsdt5, heightsl0075, heights_nosmooth, heights_divuvnew,heights_neweta],
+             [fail_t, fail_tL10, fail_tdt5, fail_tl0075, fail_t_nosmooth, fail_t_divuvnew,fail_t_neweta],
+             ['Runs', 'Runs with L=10', 'Runs with dt=5', 'Runs with l=0.0075', 'Runs with no smoothing', 'Runs with divUvNew','Runsneweta']):
     ax.scatter(h, t, marker='o',label=label)
     coeffs = np.polyfit(np.log(h), np.log(t), 1)
     x_fit = np.linspace(min(h)-50, max(h)+50, 100)
@@ -153,14 +158,15 @@ ax.legend(ncol=2)
 
 
 
+
 fig, ax = plt.subplots(1,1,figsize=(4,4))
 
-ax.scatter(heights_divuvnew, fail_t_divuvnew, marker='o', label='Runs')
+ax.scatter(heights_neweta, fail_t_neweta, marker='o', label='Runs')
 
 ax.set_xlabel('Height (m)')
 ax.set_ylabel('Time to failure (days)')
-for h,t in zip([heights_divuvnew],
-             [fail_t_divuvnew]):
+for h,t in zip([heights_neweta],
+             [fail_t_neweta]):
     coeffs = np.polyfit(np.log(h), np.log(t), 1)
     x_fit = np.linspace(min(h)-10, max(h)+50, 100)
     y_fit = np.exp(coeffs[1]) * x_fit**coeffs[0]

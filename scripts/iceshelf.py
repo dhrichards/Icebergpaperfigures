@@ -116,7 +116,22 @@ d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0),
 model.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
                            kr.damage.higherorder.AT2, [u_bc, d_bc])
 
+def crack(x,x_c,height=0.06):
+    width = args.lstar/args.cellfactor*1
+    return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>(1-height))
 
+# end_crack_x_cs = np.linspace(args.nondim_length-2, args.nondim_length-0.15, 20)
+end_crack_x_cs = args.nondim_length - np.arange(0.175,2,0.1)
+
+height = 0.08
+def end_cracks(x):
+    val = np.zeros(x.shape[1],dtype=bool)
+    for x_c in end_crack_x_cs:
+        val += crack(x,x_c,height)
+    return val
+
+
+model.damage.w.sub(0).interpolate(end_cracks)
 
 
 model.damage_on = False
@@ -149,20 +164,7 @@ model.damage_on = True
 
 
 
-def crack(x,x_c,height=0.06):
-    width = args.lstar/args.cellfactor*1
-    return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>(1-height))
 
-end_crack_x_cs = np.linspace(args.nondim_length-2, args.nondim_length-0.1, 20)
-height = 0.08
-def end_cracks(x):
-    val = np.zeros(x.shape[1],dtype=bool)
-    for x_c in end_crack_x_cs:
-        val += crack(x,x_c,height)
-    return val
-
-
-model.damage.w.sub(0).interpolate(end_cracks)
 
 
 for i in range(1,args.nt):
