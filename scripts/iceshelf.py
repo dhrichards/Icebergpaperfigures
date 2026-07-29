@@ -123,7 +123,7 @@ model.damage_on = False
 
 
 if args.relax_time > 0:
-    nt = 40
+    nt = 20
     model.params.dt.value = args.relax_time*24*60*60 / nt
     for i in range(nt):
         if MPI.COMM_WORLD.rank == 0:
