@@ -121,7 +121,7 @@ def crack(x,x_c,height=0.06):
     return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>(1-height))
 
 # end_crack_x_cs = np.linspace(args.nondim_length-2, args.nondim_length-0.15, 20)
-end_crack_x_cs = args.nondim_length - np.arange(0.15,2,0.15)
+end_crack_x_cs = args.nondim_length - np.arange(0.175,2,0.1)
 
 height = 0.08
 def end_cracks(x):
