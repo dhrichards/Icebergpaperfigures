@@ -131,40 +131,19 @@ def end_cracks(x):
     return val
 
 
-model.damage.w.sub(0).interpolate(end_cracks)
-
-
-model.damage_on = False
-
-
-if args.relax_time > 0:
-    nt = 20
-    model.params.dt.value = args.relax_time*24*60*60 / nt
-    for i in range(nt):
-        if MPI.COMM_WORLD.rank == 0:
-            print("Relaxation iteration: ", i)
-        flag,nits = model.fixed_point(save=True)
-        if flag == -1:
-            break
-        model.momentum.timestep()
-
-    model.params.dt.value = args.dt*24*60*60
-
 
 
 t = 0.0
+model.momentum.solve()
 if args.save_bp:
     model.write_checkpoint(path + "/" + filename +".bp", t)
 
 
 
 
+model.damage.w.sub(0).interpolate(end_cracks)
 
 model.damage_on = True
-
-
-
-
 
 
 for i in range(1,args.nt):
