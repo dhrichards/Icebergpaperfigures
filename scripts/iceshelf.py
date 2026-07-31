@@ -30,7 +30,7 @@ parser.add_argument("--strength", type=float, default=200, help="Tensile strengt
 parser.add_argument("--n", type=float, default=3.0, help="Glens law exponent")
 parser.add_argument("--save_bp", type=bool, default=False, help="Save bp files")
 parser.add_argument("--lfactor", type=float, default=2.0, help="Multiply l by in lower part of domain")
-parser.add_argument("--mesh_smoothing", type=bool, default=True, help="Mesh smoothing between timesteps")
+parser.add_argument("--mesh_smoothing", type=int, default=1, help="Mesh smoothing between timesteps")
 
 args = parser.parse_args()
 
@@ -120,7 +120,7 @@ d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0),
 model.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
                            kr.damage.higherorder.AT2, [u_bc, d_bc])
 
-model.momentum.mesh_smoothing = args.mesh_smoothing
+model.momentum.mesh_smoothing = bool(args.mesh_smoothing)
 
 def crack(x,x_c,height=0.06):
     width = args.lstar/args.cellfactor*1
