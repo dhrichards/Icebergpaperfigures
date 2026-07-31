@@ -37,14 +37,16 @@ args = parser.parse_args()
 
 filename = "iceshelf_L" + str(args.nondim_length) + "_H" + str(args.height) \
                         + "_l" + str(args.lstar) \
-                        +"_dt" + str(args.dt) \
+                        + "_dt" + str(args.dt) \
                         + "_sigmac" + str(args.strength) \
                         + "_n" + str(args.n) \
-                    + "_level" + str(args.level) + "_Kic" + str(args.Kic)\
-                    + "_cellfactor" + str(args.cellfactor)\
-                            + "_T" + str(abs(args.T)) \
-                            + "_lfactor" + str(args.lfactor) \
-                            + "_" + args.suffix + "_"
+                        + "_level" + str(args.level) \
+                        + "_Kic" + str(args.Kic)\
+                        + "_cellfactor" + str(args.cellfactor)\
+                        + "_T" + str(abs(args.T)) \
+                        + "_lfactor" + str(args.lfactor) \
+                        + "_meshsmoothing" + str(args.mesh_smoothing) \
+                        + "_" + args.suffix + "_"
 
 
 path = './outputs'
