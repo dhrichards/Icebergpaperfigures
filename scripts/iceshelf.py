@@ -64,7 +64,7 @@ model.max_its = args.max_its
 x = ufl.SpatialCoordinate(msh)
 z = x[msh.geometry.dim-1]
 model.params.T.value = args.T
-model.params.A0.value = mf.rate_factor_np(args.T)*(0.1*900*9.8*500)**(3-args.n)
+model.params.A0.value = mf.rate_factor_np(args.T)*(0.5*0.1*900*9.8*500)**(3-args.n)
 model.params.n.value = args.n
 model.params.H.value = args.height
 # model.params.l.value = args.lstar*args.height
@@ -163,9 +163,8 @@ for i in range(1,args.nt):
     if args.save_bp:
         model.write_checkpoint(path + "/" + filename +".bp", t)
 
-    A = mf.rate_factor(model.params.T)/model.params.A0
 
-    η0 = mf.viscosity(ufl.dev(mf.ε(model.momentum.vel_prev_it)), 3.0, 1e-10, A=A)
+    η0 = mf.viscosity(ufl.dev(mf.ε(model.momentum.vel_prev_it)), 3.0, 1e-19)
 
 
     if i ==1 or i % 10 == 0 or flag == -1 or nits > 6:
@@ -176,7 +175,6 @@ for i in range(1,args.nt):
                                         model.momentum.ε_e,
                                         model.params.Gc,
                                         η0,
-                                        mf.rate_factor(model.params.T)/model.params.A0,
                                         ],
                                         ["u","d","dprev2","dprev","dprev3",
                                         "uv","ue",
@@ -184,7 +182,6 @@ for i in range(1,args.nt):
                                         "eps_e",
                                         "Gc",
                                         "eta",
-                                        "Astar",
                                         ],
                                     t=i)
         
@@ -198,6 +195,7 @@ for i in range(1,args.nt):
 
 
 if MPI.COMM_WORLD.rank == 0:
+    print("time it:",  i)
     print(path + "/" + filename)
 
 
