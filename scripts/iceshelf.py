@@ -19,19 +19,17 @@ parser.add_argument("--dt", type=float, default=2.5, help="Time step in days")
 parser.add_argument("--cellfactor", type=float, default=1, help="Mesh cell size factor")
 parser.add_argument("--height", type=float, default=500, help="Height of iceberg in meters")
 parser.add_argument("--suffix", type=str, default="", help="suffix for filename")
-parser.add_argument("--nt", type=int, default=1000, help="number of timesteps")
-parser.add_argument("--Ttop", type=float, default=-5, help="Temperature in Celsius at top")
-parser.add_argument("--Tbot", type=float, default=-5, help="Temperature in Celsius at bottom")
+parser.add_argument("--nt", type=int, default=1500, help="number of timesteps")
+parser.add_argument("--Ttop", type=float, default=-10, help="Temperature in Celsius at top")
+parser.add_argument("--Tbot", type=float, default=-10, help="Temperature in Celsius at bottom")
 parser.add_argument("--nondim_length", type=float, default=5, help="Length of iceberg")
 parser.add_argument("--tol", type=float, default=5e-6, help="Solver tolerance")
 parser.add_argument("--min_its", type=int, default=1, help="Minimum number of solver iterations")
 parser.add_argument("--max_its", type=int, default=800, help="Maximum number of solver iterations")
-parser.add_argument("--sealevel", type=float, default=0.9, help="Non dimensional water level for hydrostatic pressure")
 parser.add_argument("--Kic", type=float, default=100, help="Kic")
 parser.add_argument("--strength0", type=float, default=200, help="Tensile strength at 0C")
-parser.add_argument("--strength_deg", type=float, default=20, help="Tensile strength degradation per degree C")
+parser.add_argument("--strength_deg", type=float, default=0, help="Tensile strength degradation per degree C")
 parser.add_argument("--save_bp", type=bool, default=False, help="Save bp files")
-parser.add_argument("--relax_time", type=float, default=400, help="Total relaxation time days")
 parser.add_argument("--lfactor", type=float, default=2.0, help="Multiply l by in lower part of domain")
 
 args = parser.parse_args()
@@ -39,7 +37,7 @@ args = parser.parse_args()
 
 filename = "iceshelf_L" + str(args.nondim_length) + "_H" + str(args.height) \
                         + "_l" + str(args.lstar) \
-                        +"_dt" + str(args.dt) + "_relaxt" + str(args.relax_time) \
+                        +"_dt" + str(args.dt) \
                         + "_sigmacdeg" + str(args.strength_deg)+ "_sigmac0" + str(args.strength0) \
                     + "_level" + str(args.level) + "_Kic" + str(args.Kic)\
                     + "_cellfactor" + str(args.cellfactor)\
@@ -71,6 +69,8 @@ model.params.dt.value = args.dt*24*60*60
 model.params.Kic.value = args.Kic*1e3
 model.params.patm.value = 0.0
 model.params.crack_level_above_sea.value = args.level
+model.params.ρc = dolfinx.fem.Constant(model.msh,0.1*900)
+model.params.viscosity_tol.value = 1e-5
 
 model.params.σt = args.strength0*1e3 - args.strength_deg*1e3*(model.params.T)
 
@@ -171,10 +171,7 @@ for i in range(1,args.nt):
                                         model.momentum.ε_e,
                                         model.params.Gc,
                                         η0,
-                                        model.params.ψcrit,
-                                        model.momentum.du,
-                                        model.momentum.du_smooth,
-                                        model.momentum.du_smooth-model.momentum.du,
+                                        mf.rate_factor(model.params.T)/model.params.A0,
                                         ],
                                         ["u","d","dprev2","dprev","dprev3",
                                         "uv","ue",
@@ -182,10 +179,7 @@ for i in range(1,args.nt):
                                         "eps_e",
                                         "Gc",
                                         "eta",
-                                        "ψcrit",
-                                        "du",
-                                        "du_smooth",
-                                        "du_smooth_minus_du",
+                                        "Astar",
                                         ],
                                     t=i)
         
