@@ -62,15 +62,15 @@ x = ufl.SpatialCoordinate(msh)
 z = x[msh.geometry.dim-1]
 model.params.T = args.Tbot + (args.Ttop - args.Tbot)*z
 model.params.A0.value = mf.rate_factor_np(args.Ttop)#*0.5*(0.1*900*9.8*500)**2
-# model.params.n.value = 1.0
+model.params.n.value = 4.0
 model.params.H.value = args.height
 # model.params.l.value = args.lstar*args.height
 model.params.dt.value = args.dt*24*60*60
 model.params.Kic.value = args.Kic*1e3
 model.params.patm.value = 0.0
 model.params.crack_level_above_sea.value = args.level
-model.params.ρc = dolfinx.fem.Constant(model.msh,0.1*900)
-model.params.viscosity_tol.value = 1e-5
+# model.params.ρc = dolfinx.fem.Constant(model.msh,0.1*900)
+# model.params.viscosity_tol.value = 1e-5
 
 model.params.σt = args.strength0*1e3 - args.strength_deg*1e3*(model.params.T)
 
