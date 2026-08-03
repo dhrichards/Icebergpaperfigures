@@ -90,7 +90,7 @@ else:
 
 if MPI.COMM_WORLD.rank == 0:
     print("ucstar: ", model.params.ucstar_float )
-    print("τ_float: ", model.params.τ_float )
+    print("τ_float: ", model.params.τ_float/(24*60*60) )
     print(path + "/" + filename)
 
 
