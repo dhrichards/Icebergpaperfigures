@@ -167,8 +167,32 @@ for i in range(1,args.nt):
     η0 = mf.viscosity(ufl.dev(mf.ε(model.momentum.vel_prev_it)), 3.0, 1e-19)
 
 
-    if i ==1 or i % 10 == 0 or flag == -1 or nits > 6:
-        kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
+    # if i ==1 or i % 10 == 0 or flag == -1 or nits > 6:
+    #     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
+    #                             model.msh, [model.momentum.u,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,model.damage.d_prev_it3,
+    #                                     model.momentum.u_v, model.momentum.u_e,
+    #                                     model.momentum.ψplus/model.params.ψcritstar,
+    #                                     model.momentum.ε_e,
+    #                                     model.params.Gc,
+    #                                     η0,
+    #                                     ],
+    #                                     ["u","d","dprev2","dprev","dprev3",
+    #                                     "uv","ue",
+    #                                     "psi_plus",
+    #                                     "eps_e",
+    #                                     "Gc",
+    #                                     "eta",
+    #                                     ],
+    #                                 t=i)
+        
+    if flag == -1:
+        break
+
+    
+    model.timestep()
+    # model.momentum.timestep()
+
+kr.utilities.write_xdmf(path + "/" + filename +"end.xdmf",
                                 model.msh, [model.momentum.u,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,model.damage.d_prev_it3,
                                         model.momentum.u_v, model.momentum.u_e,
                                         model.momentum.ψplus/model.params.ψcritstar,
@@ -184,15 +208,6 @@ for i in range(1,args.nt):
                                         "eta",
                                         ],
                                     t=i)
-        
-    if flag == -1:
-        break
-
-    
-    model.timestep()
-    # model.momentum.timestep()
-
-
 
 if MPI.COMM_WORLD.rank == 0:
     print("time it:",  i)
