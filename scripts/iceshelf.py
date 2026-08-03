@@ -15,11 +15,11 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--level", type=float, default=0.00, help="Water level in cracks above sea level (m)")
 parser.add_argument("--lstar", type=float, default=0.005, help="Regularization length scale in meters")
-parser.add_argument("--dt", type=float, default=2.5, help="Time step in days")
+parser.add_argument("--dtstar", type=float, default=1.0, help="Non-dimensional time step in days")
 parser.add_argument("--cellfactor", type=float, default=1, help="Mesh cell size factor")
 parser.add_argument("--height", type=float, default=500, help="Height of iceberg in meters")
 parser.add_argument("--suffix", type=str, default="", help="suffix for filename")
-parser.add_argument("--nt", type=int, default=1500, help="number of timesteps")
+parser.add_argument("--nt", type=int, default=10000, help="number of timesteps")
 parser.add_argument("--T", type=float, default=-10, help="Temperature in Celsius at top")
 parser.add_argument("--nondim_length", type=float, default=5, help="Length of iceberg")
 parser.add_argument("--tol", type=float, default=5e-6, help="Solver tolerance")
@@ -37,7 +37,7 @@ args = parser.parse_args()
 
 filename = "iceshelf_L" + str(args.nondim_length) + "_H" + str(args.height) \
                         + "_l" + str(args.lstar) \
-                        + "_dt" + str(args.dt) \
+                        + "_dtstar" + str(args.dtstar) \
                         + "_sigmac" + str(args.strength) \
                         + "_n" + str(args.n) \
                         + "_level" + str(args.level) \
@@ -68,7 +68,6 @@ model.params.A0.value = mf.rate_factor_np(args.T)*(0.5*0.1*900*9.8*500)**(3-args
 model.params.n.value = args.n
 model.params.H.value = args.height
 # model.params.l.value = args.lstar*args.height
-model.params.dt.value = args.dt*24*60*60
 model.params.Kic.value = args.Kic*1e3
 model.params.patm.value = 0.0
 model.params.crack_level_above_sea.value = args.level
@@ -76,6 +75,7 @@ model.params.ρc = dolfinx.fem.Constant(model.msh,0.1*900)
 model.params.viscosity_tol.value = 1e-5
 
 model.params.σt = args.strength*1e3
+model.params.dt.value = args.dtstar*model.params.τ_float
 
 def smoothstep(x, x_c, width):
     return 0.5*(1 + ufl.tanh((x-x_c)/width))
@@ -90,6 +90,7 @@ else:
 
 if MPI.COMM_WORLD.rank == 0:
     print("ucstar: ", model.params.ucstar_float )
+    print("τ_float: ", model.params.τ_float )
     print(path + "/" + filename)
 
 
@@ -155,35 +156,36 @@ model.damage_on = True
 for i in range(1,args.nt):
 
     if MPI.COMM_WORLD.rank == 0:
-        print("Iteration: ", i)
+        print("Iteration: ", i, "time: ", t/(24*60*60), "days")
 
     flag,nits = model.fixed_point(save=False, stop_bottom=True)
 
     t += model.params.dt.value
     if args.save_bp:
-        model.write_checkpoint(path + "/" + filename +".bp", t)
+        if i % 20 == 0 or flag == -1 or nits > 30:
+            model.write_checkpoint(path + "/" + filename +".bp", t)
 
 
     η0 = mf.viscosity(ufl.dev(mf.ε(model.momentum.vel_prev_it)), 3.0, 1e-19)
 
 
-    # if i ==1 or i % 10 == 0 or flag == -1 or nits > 6:
-    #     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
-    #                             model.msh, [model.momentum.u,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,model.damage.d_prev_it3,
-    #                                     model.momentum.u_v, model.momentum.u_e,
-    #                                     model.momentum.ψplus/model.params.ψcritstar,
-    #                                     model.momentum.ε_e,
-    #                                     model.params.Gc,
-    #                                     η0,
-    #                                     ],
-    #                                     ["u","d","dprev2","dprev","dprev3",
-    #                                     "uv","ue",
-    #                                     "psi_plus",
-    #                                     "eps_e",
-    #                                     "Gc",
-    #                                     "eta",
-    #                                     ],
-    #                                 t=i)
+    if i ==1 or i % 100 == 0 or flag == -1 or nits > 30:
+        kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
+                                model.msh, [model.momentum.u,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,model.damage.d_prev_it3,
+                                        model.momentum.u_v, model.momentum.u_e,
+                                        model.momentum.ψplus/model.params.ψcritstar,
+                                        model.momentum.ε_e,
+                                        model.params.Gc,
+                                        η0,
+                                        ],
+                                        ["u","d","dprev2","dprev","dprev3",
+                                        "uv","ue",
+                                        "psi_plus",
+                                        "eps_e",
+                                        "Gc",
+                                        "eta",
+                                        ],
+                                    t=i)
         
     if flag == -1:
         break
@@ -211,6 +213,7 @@ kr.utilities.write_xdmf(path + "/" + filename +"end.xdmf",
 
 if MPI.COMM_WORLD.rank == 0:
     print("time it:",  i)
+    print("time t:",  t)
     print(path + "/" + filename)
 
 
