@@ -163,8 +163,6 @@ for i in range(1,args.nt):
     if args.save_bp:
         model.write_checkpoint(path + "/" + filename +".bp", t)
 
-    if i == 10:
-        model.params.dt.value *= 10.0
 
     η0 = mf.viscosity(ufl.dev(mf.ε(model.momentum.vel_prev_it)), 3.0, 1e-19)
 
@@ -213,7 +211,6 @@ kr.utilities.write_xdmf(path + "/" + filename +"end.xdmf",
 
 if MPI.COMM_WORLD.rank == 0:
     print("time it:",  i)
-    print("time t:",  t)
     print(path + "/" + filename)
 
 
