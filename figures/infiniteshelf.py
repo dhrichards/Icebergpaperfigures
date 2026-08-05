@@ -14,7 +14,7 @@ plt.rcParams.update({
     "font.serif": ["Palatino"],
 })
 
-filename = f'ssa_H600.0_l0.01_cellfactor2.0__.bp'
+filename = f'ssa_H600.0_l0.01_cellfactor2__.bp'
 # use a nice ice blue
 colorcrack = "#00a6ff"
 get_outline = kr.plotting.get_outline
@@ -44,8 +44,7 @@ model.params.dt.value = 2.5*24*60*60
 model.params.Kic.value = 100*1e3
 model.params.patm.value = 0.0
 model.params.crack_level_above_sea.value = 0.0
-model.params.sea_level.value = 0.9*H
-model.params.length.value =  2*H
+
 
 
 model.setup()

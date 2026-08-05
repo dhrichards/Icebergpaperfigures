@@ -5,6 +5,7 @@ import matplotlib.ticker as mticker
 import kraken.numerics.maths_functions as mf
 import statsmodels.api as sm
 from scipy.optimize import curve_fit
+from scipy.stats import norm
 
 
 # use latex
@@ -55,27 +56,31 @@ def height_plot(ax,h,t,n):
 def shifted_power(H, A, H0, n):
     return A * (H + H0)**n
 
-def shifted_power_law(ax,h,t,n):
+def prescribed_power(H,A,n):
+    return A * H**(-n-1)
+
+def prescribed_plot(ax,h,t,n):
     label = 'n=' + str(n)
     points = ax.scatter(h, t, marker='o',label=label)
 
 
     # Initial guess
-    p0 = [1e12, 100.0, -4.0]
+    p0 = [1e12]
 
     # Nonlinear least-squares fit
     popt, pcov = curve_fit(
-        shifted_power,
+        lambda H, A: prescribed_power(H,A,n),
         h,
         t,
         p0=p0,
         maxfev=10000
     )
 
-    A, H0, exponent = popt
+    A, = popt
 
     x_fit = np.linspace(min(h)-10, max(h)+50, 300)
-    y_fit = shifted_power(x_fit, *popt)
+    y_fit = prescribed_power(x_fit, A, n)
+
 
     # Plot fit
     ax.plot(
@@ -83,17 +88,125 @@ def shifted_power_law(ax,h,t,n):
         y_fit,
         '--',
         lw=1,
+        color = points.get_facecolor()[0],
+        # label=(
+        #     rf'$t \propto (H + {H0:.2f})^{{{exponent:.2f}}}$'
+        # )
+    )
+
+
+def prescribed_power(H,A,n):
+    return A * H**(-n-1)
+
+def prescribed_plot(ax,h,t,n):
+    label = 'n=' + str(n)
+    points = ax.scatter(h, t, marker='o',label=label)
+
+
+    # Initial guess
+    p0 = [1e12]
+
+    # Nonlinear least-squares fit
+    popt, pcov = curve_fit(
+        lambda H, A: prescribed_power(H,A,n),
+        h,
+        t,
+        p0=p0,
+        maxfev=10000
+    )
+
+    A, = popt
+
+    x_fit = np.linspace(min(h)-10, max(h)+50, 300)
+    y_fit = prescribed_power(x_fit, A, n)
+
+
+    # Plot fit
+    ax.plot(
+        x_fit,
+        y_fit,
+        '--',
+        lw=1,
+        color = points.get_facecolor()[0],
+        # label=(
+        #     rf'$t \propto (H + {H0:.2f})^{{{exponent:.2f}}}$'
+        # )
+    )
+
+
+def prescribed_power(H,A,n):
+    return A * H**(-n-1)
+
+def prescribed_plot(ax,h,t,n):
+
+    t = t[h<501]
+    h = h[h<501]
+    label = 'n=' + str(n)
+    points = ax.scatter(h, t, marker='o',label=label)
+
+
+    # Initial guess
+    p0 = [1e12]
+
+    # Nonlinear least-squares fit
+    popt, pcov = curve_fit(
+        lambda H, A: prescribed_power(H,A,n),
+        h,
+        t,
+        p0=p0,
+        maxfev=10000
+    )
+
+    A, = popt
+
+    x_fit = np.linspace(min(h)-10, max(h)+50, 300)
+    y_fit = prescribed_power(x_fit, A, n)
+
+
+    # Plot fit
+    ax.plot(
+        x_fit,
+        y_fit,
+        '--',
+        lw=1,
+        color = points.get_facecolor()[0],
         label=(
-            rf'$t \propto (H + {H0:.2f})^{{{exponent:.2f}}}$'
+            r'$t \propto H^{' + str(n+1) + '}$' 
         )
     )
+
+    sigma_A = np.sqrt(pcov[0, 0])
+
+    
+
+    # Standard error of A
+    sigma_A = np.sqrt(pcov[0, 0])
+
+    # Standard error of fitted curve
+    sigma_y = x_fit**(-n-1) * sigma_A
+
+    # 95% confidence interval
+    z = norm.ppf(0.975)   # = 1.96
+    lower = y_fit - z * sigma_y
+    upper = y_fit + z * sigma_y
+
+    # ax.fill_between(
+    #     x_fit,
+    #     lower,
+    #     upper,
+    #     color=points.get_facecolor()[0],
+    #     alpha=0.25,
+    #     linewidth=0,
+    # )
+
+
 
 
 def confidence_plot(ax,h,t,n):
     t = t[h>349]
     h = h[h>349]
-    t = t[h<501]
-    h = h[h<501]
+    t = t[h<551]
+    h = h[h<551]
   
     h = np.array(h)
     label = '$n=' + str(n) +'$'
@@ -160,15 +273,11 @@ def confidence_plot(ax,h,t,n):
         color=points.get_facecolor()[0],
         alpha=0.2,
         label = rf'$t \propto H^{{{exp_hi:.2f}}}$ to $H^{{{exp_lo:.2f}}}$'
+        # label = rf'95\% CI: $t \propto H^{{{exp_lo:.2f}}}$ to $H^{{{exp_hi:.2f}}}$'
     )
 
 
-def tau(H,n):
-    δ = 0.1; ρi = 900; g=9.8
-    E = 9.33e9; ν=0.325
-    μ = E/(2*(1+ν))
-    A = mf.rate_factor_np(-10)*(0.5*0.1*900*9.8*500)**(3-n)
-    return (δ*ρi*g*H)**(1-n)/(A*μ)
+
 
 
 heights_norelax = np.array([300,350,400,450,500,550],dtype=np.float64)
@@ -181,7 +290,7 @@ h_n2_nosmooth = np.array([250,300,350,400,450,500,550,600], dtype=np.float64)
 its_n2_nosmooth = np.array([571,290,172,116,86,68,56,49], dtype=np.float64)
 
 heights_linear = np.array([400,500,550], dtype=np.float64)
-# fail_its_linear = [28,22,20]
+fail_its_linearA = np.array([28,22,20])
 fail_its_linear = np.array([75,52,45], dtype=np.float64)
 
 heights_lin_nosmooth = np.array([250,300,350,400,450,500,550,600], dtype=np.float64)
@@ -198,38 +307,81 @@ heights_n2 = np.array([350,450,550], dtype=np.float64)
 its_n2 = np.array([83,46,32], dtype=np.float64)
 
 
+h_n3_dstar10 = np.array([350,400,450,500,550], dtype=np.float64)
+t_n3_dstar10 = np.array([762.09,441.869,284.694,201.658,148.62]) 
+
+h_n3_dtstar10_l5 = np.array([500])
+t_n3_dtstar10_l5 = np.array(196.439)
+
+h_n1_dstar10 = np.array([350,400,450,500,550], dtype=np.float64)
+t_n1_dstar10 = np.array([290.98,211.1,167.36,138.83,117.913])
+
+h_n1_dtstar10_l5 = np.array([500],dtype=np.float64)
+t_n1_dtstar10_l5 = np.array([135.03])
+
+h_n2_dstar10 = np.array([350,400,450,500,550], dtype=np.float64)
+t_n2_dstar10 = np.array([422.05,275.485,196.32,147.24,116.584])
+
+h_n3_dstar1 = np.array([350,450,550], dtype=np.float64)
+t_n3_dstar1 = np.array([59101083,22355439,11184098])/(24*60*60)
+
+h_n1_dstar1 = np.array([350,450,550], dtype=np.float64)
+t_n1_dstar1 = np.array([21788644,12225302,8133769])/(24*60*60)
+
 fig, ax = plt.subplots(1,1,figsize=(4,4))
 
-# height_plot(ax,heights_norelax,fail_its_norelax,3)
-# height_plot(ax,heights_linear,fail_its_linear,1)
-# height_plot(ax,heights_n2,its_n2,2)
-confidence_plot(ax,heights_nosmooth,its_nosmooth*dt,3)
-confidence_plot(ax,h_n2_nosmooth,its_n2_nosmooth*dt,2)
-confidence_plot(ax,heights_lin_nosmooth,its_lin_nosmooth*dt,1)
 
-# shifted_power_law(ax,heights_nosmooth,its_nosmooth*dt,3)
-# shifted_power_law(ax,h_n2_nosmooth,its_n2_nosmooth*dt,2)
-# shifted_power_law(ax,heights_lin_nosmooth,its_lin_nosmooth*dt,1)
 
-# height_plot(ax,h_lin_nosmooth_L10,its_lin_nosmooth_L10*dt,1)
-# height_plot(ax,h_nosmooth_L10,its_nosmooth_L10*dt,3)
+# prescribed_plot(ax,h_n3_dstar10, t_n3_dstar10, 3)
+# prescribed_plot(ax,h_n2_dstar10, t_n2_dstar10, 2)
+# prescribed_plot(ax,h_n1_dstar10, t_n1_dstar10, 1)
 
+# height_plot(ax,heights_nosmooth,its_nosmooth*2.5,3)
+confidence_plot(ax,h_n3_dstar10, t_n3_dstar10, 3)
+confidence_plot(ax,h_n2_dstar10, t_n2_dstar10, 2)
+confidence_plot(ax,h_n1_dstar10, t_n1_dstar10, 1)
 
 ax.set_xlabel('Height (m)')
 ax.set_ylabel('Time to failure (days)')
 
 # ax.set_title('Iceberg time to failure vs height', fontsize=16)
 
-ax.set_yscale('log')
-ax.set_xscale('log')
+# ax.set_yscale('log')
+# ax.set_xscale('log')
 ax.grid(which='both', linestyle='--', linewidth=0.5, alpha=0.7)
 #legend outside
 ax.legend(ncol=1,bbox_to_anchor=(1, 1))
 
 
+#%%
 
+def tau(H,n):
+    δ = 0.1; ρi = 900; g=9.8
+    E = 9.33e9; ν=0.325
+    μ = E/(2*(1+ν))
+    A = mf.rate_factor_np(-10)*(0.5*0.1*900*9.8*500)**(3-n)
+    τxx = δ*ρi*g*H/4
+    τe2 = np.sqrt(τxx**2)
+    σc = δ*ρi*g*H/4
+    τ = (σc)**(1-n)/(A*μ)
+    return τ/(24*60*60)
 
+fig,ax = plt.subplots(1,1,figsize=(4,4))
 
+confidence_plot(ax,h_n3_dstar10, t_n3_dstar10/tau(h_n3_dstar10,3), 3)
+confidence_plot(ax,h_n2_dstar10, t_n2_dstar10/tau(h_n2_dstar10,2), 2)
+confidence_plot(ax,h_n1_dstar10, t_n1_dstar10/tau(h_n1_dstar10,1), 1)
+
+ax.set_xscale('log')
+ax.set_yscale('log')
+
+ax.legend(ncol=1,bbox_to_anchor=(1, 1))
+
+#%%
+fig,axs = plt.subplots(1,1,figsize=(4,4))
+
+confidence_plot(axs[0],h_n3_dstar10, t_n3_dstar10, 3)
+confidence_plot(axs[1],h_n1_dstar10, t_n1_dstar10, 1)
 #%%
 import kraken as kr
 Ts = [-20,-15,-10,-5]
@@ -289,89 +441,17 @@ fig.savefig('iceberg_time_to_failure_vs_height.pdf',bbox_inches='tight')
 #%%
 
 
-h = heights_norelax
-t = fail_t_norelax
+
 
 fig, ax = plt.subplots(figsize=(4, 4))
 
-# Scatter data
-ax.scatter(h, t, marker='o', label='Runs')
+confidence_plot(ax,h_n3_dstar10, t_n3_dstar10, 3)
 
-# ------------------------------------------------------------------
-# Fit power law: t = A H^n
-# ------------------------------------------------------------------
-
-# Fit in log-log space
-x = np.log(h)
-y = np.log(t)
-
-X = sm.add_constant(x)
-model = sm.OLS(y, X).fit()
-
-intercept, exponent = model.params
-exp_lo, exp_hi = model.conf_int(alpha=0.05)[1]
-
-# Smooth curve
-x_fit = np.linspace(min(h)-10, max(h)+50, 300)
-xlog_fit = np.log(x_fit)
-
-# Best-fit curve
-y_fit = np.exp(intercept + exponent*xlog_fit)
-
-# Sample joint distribution of (intercept, exponent)
-cov = model.cov_params()
-samples = np.random.multivariate_normal(
-    mean=model.params,
-    cov=cov,
-    size=10000
-)
-
-# Evaluate sampled curves
-logy_samples = (
-    samples[:, 0, None]
-    + samples[:, 1, None] * xlog_fit[None, :]
-)
-
-y_samples = np.exp(logy_samples)
-
-# Pointwise 95% confidence band
-y_lower = np.percentile(y_samples, 2.5, axis=0)
-y_upper = np.percentile(y_samples, 97.5, axis=0)
-
-# Plot fit
-line, = ax.plot(
-    x_fit,
-    y_fit,
-    '--',
-    lw=1,
-    label=(
-        rf'$t \propto H^{{{exponent:.2f}}}$'
-        '\n'
-        rf'95\% CI: [{exp_lo:.2f}, {exp_hi:.2f}]'
-    )
-)
-
-# Confidence band
-ax.fill_between(
-    x_fit,
-    y_lower,
-    y_upper,
-    color=line.get_color(),
-    alpha=0.2,
-)
-
-# ------------------------------------------------------------------
-
-# # Example comparison law
-# n = -3
-# A = t[-2] / h[-2]**n
-# y_fit = A * x_fit**n
-# ax.plot(x_fit, y_fit, '--', label=rf'$t \propto H^{{{n}}}$')
 
 ax.set_xlabel('Height (m)')
 ax.set_ylabel('Time to failure (days)')
 
-ax.legend(ncol=2)
+ax.legend()
 
 fig.savefig('iceberg_time_to_failure_vs_height.png',
             dpi=300, bbox_inches='tight')

@@ -62,7 +62,7 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
 model = kr.base.Simulation(msh)
 
 model.tol = 5e-6
-model.min_its = 200
+model.min_its = 3
 model.max_its = 1300
 
 x = ufl.SpatialCoordinate(msh)
@@ -117,7 +117,7 @@ if args.save_bp:
     model.write_checkpoint(path + "/" + filename +".bp", t)
 
 
-model.damage_on = True
+# model.damage_on = True
 
 
 

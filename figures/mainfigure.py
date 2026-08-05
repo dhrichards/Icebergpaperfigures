@@ -28,6 +28,7 @@ lightgrey = "#cccccc"
 
 # filename = f'icebergsymm_L5.0_H500.0_l0.005_dt2.5_relaxt400.0_sigmacdeg0.0_sigmac0200_level0.0_Kic100_cellfactor1.0_Ttop5.0_Tbot5.0_lfactor2.0__.bp'
 filename = f'iceshelf_L5.0_H500.0_l0.005_dtstar10.0_sigmac200_n3.0_level0.0_Kic100_cellfactor1.0_T10_lfactor2.0_meshsmoothing0__.bp'
+filestart = f'iceshelf_L5.0_H500.0_l0.005_dtstar10.0_sigmac200_n3.0_level0.0_Kic100_cellfactor1.0_T10_lfactor2.0_meshsmoothing0_start_.bp'
 # extract attributes fromf filename
 L = float(filename.split('L')[1].split('_')[0])
 H = float(filename.split('H')[1].split('_')[0])
@@ -40,8 +41,9 @@ cellfactor = float(filename.split('cellfactor')[1].split('_')[0])
 T = float(filename.split('T')[1].split('_')[0])
 nondim_length = float(filename.split('lfactor')[1].split('_')[0])
 
-t = adios4dolfinx.read_timestamps(filename, MPI.COMM_WORLD, function_name = "w_damage")
-t_days = t/(24*3600)
+t_normal = adios4dolfinx.read_timestamps(filename, MPI.COMM_WORLD, function_name = "w_damage")
+t_start = adios4dolfinx.read_timestamps(filestart, MPI.COMM_WORLD, function_name = "w_damage")
+t_days = t_normal/(24*3600)
 t_slices = [100,150]
 inds = []
 for t_slice in t_slices:
@@ -58,9 +60,13 @@ msh0 = adios4dolfinx.read_mesh(filename, MPI.COMM_WORLD, time=0)
 
 
 for i, ax in zip(itstoplot, axs):
-    # if i ==2:
-    #     break
-    msh = adios4dolfinx.read_mesh(filename, MPI.COMM_WORLD, time=t[i])
+    if i == 1:
+        file = filestart
+        t = t_start
+    else:
+        file = filename
+        t = t_normal
+    msh = adios4dolfinx.read_mesh(file, MPI.COMM_WORLD, time=t[i])
     model = kr.base.Simulation(msh)
 
     x = ufl.SpatialCoordinate(msh)
@@ -81,12 +87,12 @@ for i, ax in zip(itstoplot, axs):
     
     
     model.setup()
-    model.read_checkpoint(filename, t=t[i])
+    model.read_checkpoint(file, t=t[i])
     
 
-    adios4dolfinx.read_function(filename, model.momentum.w, name ="w_momentum", time=t[i])
-    adios4dolfinx.read_function(filename, model.damage.w, name ="w_damage", time=t[i]) 
-    adios4dolfinx.read_function(filename, model.damage.w_prev_it2, name ="w_prev_it2_damage", time=t[i])
+    adios4dolfinx.read_function(file, model.momentum.w, name ="w_momentum", time=t[i])
+    adios4dolfinx.read_function(file, model.damage.w, name ="w_damage", time=t[i]) 
+    adios4dolfinx.read_function(file, model.damage.w_prev_it2, name ="w_prev_it2_damage", time=t[i])
 
     # model.setup()
     
