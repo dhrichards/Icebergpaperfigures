@@ -30,7 +30,7 @@ parser.add_argument("--strength", type=float, default=200, help="Tensile strengt
 parser.add_argument("--n", type=float, default=3.0, help="Glens law exponent")
 parser.add_argument("--save_bp", type=bool, default=False, help="Save bp files")
 parser.add_argument("--lfactor", type=float, default=2.0, help="Multiply l by in lower part of domain")
-parser.add_argument("--mesh_smoothing", type=int, default=1, help="Mesh smoothing between timesteps")
+parser.add_argument("--mesh_smoothing", type=int, default=0, help="Mesh smoothing between timesteps")
 
 args = parser.parse_args()
 
@@ -162,7 +162,7 @@ for i in range(1,args.nt):
 
     t += model.params.dt.value
     if args.save_bp:
-        if i % 20 == 0 or flag == -1 or nits > 30:
+        if i == 1 or i % 20 == 0 or flag == -1 or nits > 30:
             model.write_checkpoint(path + "/" + filename +".bp", t)
 
 

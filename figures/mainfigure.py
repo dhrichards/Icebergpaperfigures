@@ -10,6 +10,7 @@ from matplotlib import tri
 from mpi4py import MPI
 from tqdm import tqdm
 from matplotlib.colors import ListedColormap
+import dolfinx
 
 #use latex
 plt.rcParams.update({
@@ -26,25 +27,29 @@ lightgrey = "#cccccc"
 
 
 # filename = f'icebergsymm_L5.0_H500.0_l0.005_dt2.5_relaxt400.0_sigmacdeg0.0_sigmac0200_level0.0_Kic100_cellfactor1.0_Ttop5.0_Tbot5.0_lfactor2.0__.bp'
-filename = f'iceshelf_L5.0_H500.0_l0.005_dt2.5_relaxt200.0_sigmacdeg0.0_sigmac0200_level0.0_Kic100_cellfactor1.0_Ttop10.0_Tbot10.0_lfactor2.0__.bp'
+filename = f'iceshelf_L5.0_H500.0_l0.005_dtstar10.0_sigmac200_n3.0_level0.0_Kic100_cellfactor1.0_T10_lfactor2.0_meshsmoothing0__.bp'
 # extract attributes fromf filename
 L = float(filename.split('L')[1].split('_')[0])
 H = float(filename.split('H')[1].split('_')[0])
 lstar = float(filename.split('_l')[1].split('_')[0])
-dt = float(filename.split('dt')[1].split('_')[0])
-strength_deg = float(filename.split('sigmacdeg')[1].split('_')[0])
-strength0 = float(filename.split('sigmac0')[1].split('_')[0])
+dtstar = float(filename.split('dtstar')[1].split('_')[0])
+strength = float(filename.split('sigmac')[1].split('_')[0])
 level = float(filename.split('level')[1].split('_')[0])
 Kic = float(filename.split('Kic')[1].split('_')[0])
 cellfactor = float(filename.split('cellfactor')[1].split('_')[0])
-Ttop = float(filename.split('Ttop')[1].split('_')[0])
-Tbot = float(filename.split('Tbot')[1].split('_')[0])
+T = float(filename.split('T')[1].split('_')[0])
 nondim_length = float(filename.split('lfactor')[1].split('_')[0])
 
 t = adios4dolfinx.read_timestamps(filename, MPI.COMM_WORLD, function_name = "w_damage")
+t_days = t/(24*3600)
+t_slices = [100,150]
+inds = []
+for t_slice in t_slices:
+    inds.append(np.abs(t_days-t_slice).argmin())
 
-itstoplot = [0,1,-2, -1]
-fig, axs = plt.subplots(len(itstoplot), 1, figsize=(8,8))
+
+itstoplot = [0,1,*inds,-2, -1]
+fig, axs = plt.subplots(len(itstoplot)//2, 2, figsize=(8,8))
 axs = axs.flatten()
 letters = ['a', 'b', 'c', 'd', 'e', 'f']
 j = 0
@@ -60,17 +65,17 @@ for i, ax in zip(itstoplot, axs):
 
     x = ufl.SpatialCoordinate(msh)
     z = x[msh.geometry.dim-1]
-    model.params.T = Tbot + (Ttop - Tbot)*z
-    model.params.A0.value = mf.rate_factor_np(Ttop)
+    model.params.T.value = -T
+    model.params.A0.value = mf.rate_factor_np(T)
     model.params.H.value = H
     model.params.l.value = lstar*H
-    model.params.dt.value = dt*24*60*60
     model.params.Kic.value = Kic*1e3
     model.params.patm.value = 0.0
     model.params.crack_level_above_sea.value = level
+    model.params.ρc = dolfinx.fem.Constant(model.msh,0.1*900)
 
-
-    model.params.σc = strength0*1e3 - strength_deg*1e3*(model.params.T)
+    model.params.dt.value = dtstar*model.params.τ_float
+    model.params.σc = strength*1e3 
 
    
     
@@ -105,14 +110,14 @@ for i, ax in zip(itstoplot, axs):
 
     
 
-    axins = ax.inset_axes([0.55,0.05,0.43,0.9],
-                          xlim = (L-0.2,L+0.1), ylim=(0.8,1), xticklabels=[],
-                          yticklabels=[])
-    axins.set_xticks([])
-    axins.set_yticks([])
-    axins.set_aspect('equal')
+    # axins = ax.inset_axes([0.55,0.05,0.43,0.9],
+    #                       xlim = (L-0.2,L+0.1), ylim=(0.8,1), xticklabels=[],
+    #                       yticklabels=[])
+    # axins.set_xticks([])
+    # axins.set_yticks([])
+    # axins.set_aspect('equal')
 
-    for a in [ax,axins]:
+    for a in [ax]:#,axins]:
     # Plot all in one go with a single label
         a.plot(*get_outline(msh0), lw=0.5, color=lightgrey,label='Outline at $t=0$',alpha=1)
         a.plot(*get_outline(msh), lw=0.5,color=darkgrey,label=r'Outline')
@@ -163,20 +168,20 @@ for i, ax in zip(itstoplot, axs):
     #hide axes
     ax.axis('off')
 
-    ax.set_xlim([L-2,L+2])
+    ax.set_xlim([L-1.4,L+0.1])
     ax.set_ylim([-0.01,1.01])
 
     
 
-    c = axins.tricontourf(tess, 
-                       ev, 
-                       levels=np.linspace(-5,0,11),
-                        cmap=cmap, vmin=-5, vmax=0, extend='both')
-    c2 = axins.tricontourf(tess, d, levels=[d_val,1.2], colors='black')
+    # c = axins.tricontourf(tess, 
+    #                    ev, 
+    #                    levels=np.linspace(-5,0,11),
+    #                     cmap=cmap, vmin=-5, vmax=0, extend='both')
+    # c2 = axins.tricontourf(tess, d, levels=[d_val,1.2], colors='black')
     
-    ax.indicate_inset_zoom(axins, edgecolor="black")
+    # ax.indicate_inset_zoom(axins, edgecolor="black")
     
-    t_days = t[i]/(3600*24)
+    t_days = (t[i])/(3600*24)
     ax.set_title(f'({letters[j]}) $t = {t_days:.1f}$ days',fontsize=11)
     # ax.text(5, 1.1, f'({letters[j]}) $t = {t_days:.2f}$ days',ha ='center', va='bottom',fontsize=11)
     # ax.text(-2.3, 0.5, f'({letters[j]}) $t = {t_days:.2f}$ days',ha ='left', va='center',fontsize=11)
