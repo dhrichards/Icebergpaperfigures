@@ -58,7 +58,6 @@ os.makedirs(path, exist_ok=True)
 
 msh = kr.meshes.fenicsx_refined_mesh(args.nondim_length, args.lstar/args.cellfactor, 0.5, large_size=0.2, top_fine_length=2.5, htop2 =1.1)
 model = kr.base.Simulation(msh)
-model.basal_friction = False
 
 model.tol = args.tol
 model.min_its = args.min_its
@@ -97,9 +96,7 @@ if MPI.COMM_WORLD.rank == 0:
     print(path + "/" + filename)
 
 
-# model.params.crack_level_above_sea = smoothtransition(
-#     0,args.level, x[1], 1 - 0.25, 0.05
-# )
+
 
 def left_boundary(x):
     return np.isclose(x[0], 0)
@@ -163,7 +160,7 @@ for i in range(1,args.nt):
     if MPI.COMM_WORLD.rank == 0:
         print("Iteration: ", i, "time: ", t/(24*60*60), "days")
 
-    flag,nits = model.fixed_point(save=True, stop_bottom=False)
+    flag,nits = model.fixed_point(save=False, stop_bottom=True)
 
     t += model.params.dt.value
     if args.save_bp:
@@ -181,7 +178,6 @@ for i in range(1,args.nt):
                                         model.momentum.ψplus/model.params.ψcritstar,
                                         model.momentum.ε_e,
                                         model.params.Gc,
-                                        model.momentum.crack_pressure(model.momentum.du),
                                         η0,
                                         ],
                                         ["u","d","dprev2","dprev","dprev3",
@@ -189,7 +185,6 @@ for i in range(1,args.nt):
                                         "psi_plus",
                                         "eps_e",
                                         "Gc",
-                                        "p_c",
                                         "eta",
                                         ],
                                     t=i)
