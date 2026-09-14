@@ -31,6 +31,7 @@ parser.add_argument("--n", type=float, default=3.0, help="Glens law exponent")
 parser.add_argument("--save_bp", type=bool, default=False, help="Save bp files")
 parser.add_argument("--lfactor", type=float, default=2.0, help="Multiply l by in lower part of domain")
 parser.add_argument("--mesh_smoothing", type=int, default=0, help="Mesh smoothing between timesteps")
+parser.add_argument("--seed_cracks", type=int, default=1, help="Seed cracks in domain")
 
 args = parser.parse_args()
 
@@ -46,6 +47,7 @@ filename = "iceshelf_L" + str(args.nondim_length) + "_H" + str(args.height) \
                         + "_T" + str(abs(args.T)) \
                         + "_lfactor" + str(args.lfactor) \
                         + "_meshsmoothing" + str(args.mesh_smoothing) \
+                        + "_seedcracks" + str(args.seed_cracks) \
                         + "_" + args.suffix + "_"
 
 
@@ -54,7 +56,7 @@ os.makedirs(path, exist_ok=True)
 
 
 
-msh = kr.meshes.fenicsx_refined_mesh(args.nondim_length, args.lstar/args.cellfactor, 0.3, large_size=0.2, top_fine_length=2.5, htop2 =1.1)
+msh = kr.meshes.fenicsx_refined_mesh(args.nondim_length, args.lstar/args.cellfactor, 0.5, large_size=0.2, top_fine_length=2.5, htop2 =1.1)
 model = kr.base.Simulation(msh)
 model.basal_friction = False
 
@@ -110,7 +112,7 @@ u_bc = lambda V: [
 
 
 def fixed(x):
-    return (x[0]<(args.nondim_length -0.3))*(x[1]<0.9) | (x[0]<(args.nondim_length - 2.0))
+    return (x[0]<(args.nondim_length -0.5))*(x[1]<0.9) | (x[0]<(args.nondim_length - 2.0))
 
 
 
@@ -146,12 +148,12 @@ def end_cracks(x):
 t = 0.0
 model.momentum.solve()
 if args.save_bp:
-    model.write_checkpoint(path + "/" + filename +".bp", t)
+    model.write_checkpoint(path + "/" + filename +".bp", t, append=False)
 
 
 
-
-model.damage.w.sub(0).interpolate(end_cracks)
+if args.seed_cracks:
+    model.damage.w.sub(0).interpolate(end_cracks)
 
 model.damage_on = True
 
@@ -166,14 +168,14 @@ for i in range(1,args.nt):
     t += model.params.dt.value
     if args.save_bp:
         if i == 1 or i % 20 == 0 or flag == -1 or nits > 30:
-            model.write_checkpoint(path + "/" + filename +".bp", t)
+            model.write_checkpoint(path + "/" + filename +".bp", t, append=True)
 
 
     η0 = mf.viscosity(ufl.dev(mf.ε(model.momentum.vel_prev_it)), 3.0, 1e-19)
 
 
-    if i ==1 or i % 100 == 0 or flag == -1 or nits > 30:
-        kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
+    if i ==1 or i % 50 == 0 or flag == -1 or nits > 10:
+        kr.plotting.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                                 model.msh, [model.momentum.u,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,model.damage.d_prev_it3,
                                         model.momentum.u_v, model.momentum.u_e,
                                         model.momentum.ψplus/model.params.ψcritstar,
@@ -199,27 +201,12 @@ for i in range(1,args.nt):
     model.timestep()
     # model.momentum.timestep()
 
-kr.utilities.write_xdmf(path + "/" + filename +"end.xdmf",
-                                model.msh, [model.momentum.u,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,model.damage.d_prev_it3,
-                                        model.momentum.u_v, model.momentum.u_e,
-                                        model.momentum.ψplus/model.params.ψcritstar,
-                                        model.momentum.ε_e,
-                                        model.params.Gc,
-                                        η0,
-                                        ],
-                                        ["u","d","dprev2","dprev","dprev3",
-                                        "uv","ue",
-                                        "psi_plus",
-                                        "eps_e",
-                                        "Gc",
-                                        "eta",
-                                        ],
-                                    t=i)
 
 if MPI.COMM_WORLD.rank == 0:
     print("time it:",  i)
-    print("time t:",  t)
+    print("time t:",  t/(24*3600))
     print(path + "/" + filename)
 
-
+if args.save_bp == False:
+    model.write_checkpoint(path + "/" + filename +"end.bp", t, append=False)
    
