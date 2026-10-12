@@ -105,7 +105,7 @@ def left_boundary(x):
 
 u_bc = lambda V: [
                             bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                            bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+                            # bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
                             ]
 
 
@@ -121,7 +121,7 @@ d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0),
                 ]
 
 
-model.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
+model.setup(kr.momentum.tensor.SemiLagrangianEpsilon,
                            kr.damage.higherorder.AT2, [u_bc, d_bc])
 
 model.momentum.mesh_smoothing = bool(args.mesh_smoothing)
@@ -151,9 +151,9 @@ if args.save_bp:
 
 
 
-model.damage.w.sub(0).interpolate(end_cracks)
+# model.damage.w.sub(0).interpolate(end_cracks)
 
-model.damage_on = True
+model.damage_on = False
 
 
 for i in range(1,args.nt):
@@ -169,26 +169,26 @@ for i in range(1,args.nt):
             model.write_checkpoint(path + "/" + filename +".bp", t)
 
 
-    η0 = mf.viscosity(ufl.dev(mf.ε(model.momentum.vel_prev_it)), 3.0, 1e-19)
+    # η0 = mf.viscosity(ufl.dev(mf.ε(model.momentum.vel_prev_it)), 3.0, 1e-19)
 
 
-    if i ==1 or i % 100 == 0 or flag == -1 or nits > 30:
-        kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
+    if i ==1 or i % 1 == 0 or flag == -1 or nits > 30:
+        kr.plotting.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                                 model.msh, [model.momentum.u,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,model.damage.d_prev_it3,
-                                        model.momentum.u_v, model.momentum.u_e,
+                                        # model.momentum.u_v, model.momentum.u_e,
                                         model.momentum.ψplus/model.params.ψcritstar,
                                         model.momentum.ε_e,
                                         model.params.Gc,
-                                        model.momentum.crack_pressure(model.momentum.du),
-                                        η0,
+                                        # model.momentum.crack_pressure(model.momentum.du),
+                                        # η0,
                                         ],
                                         ["u","d","dprev2","dprev","dprev3",
-                                        "uv","ue",
+                                        # "uv","ue",
                                         "psi_plus",
                                         "eps_e",
                                         "Gc",
-                                        "p_c",
-                                        "eta",
+                                        # "p_c",
+                                        # "eta",
                                         ],
                                     t=i)
         
@@ -199,20 +199,20 @@ for i in range(1,args.nt):
     model.timestep()
     # model.momentum.timestep()
 
-kr.utilities.write_xdmf(path + "/" + filename +"end.xdmf",
+kr.plotting.write_xdmf(path + "/" + filename +"end.xdmf",
                                 model.msh, [model.momentum.u,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,model.damage.d_prev_it3,
                                         model.momentum.u_v, model.momentum.u_e,
                                         model.momentum.ψplus/model.params.ψcritstar,
                                         model.momentum.ε_e,
                                         model.params.Gc,
-                                        η0,
+                                        # η0,
                                         ],
                                         ["u","d","dprev2","dprev","dprev3",
                                         "uv","ue",
                                         "psi_plus",
                                         "eps_e",
                                         "Gc",
-                                        "eta",
+                                        # "eta",
                                         ],
                                     t=i)
 
