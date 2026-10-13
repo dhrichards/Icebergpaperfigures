@@ -54,7 +54,7 @@ os.makedirs(path, exist_ok=True)
 
 
 
-msh = kr.meshes.fenicsx_refined_mesh(args.nondim_length, args.lstar/args.cellfactor, 0.3, large_size=0.2, top_fine_length=2.5, htop2 =1.1)
+msh = kr.meshes.fenicsx_refined_mesh(args.nondim_length, args.lstar/args.cellfactor, 0.4, large_size=0.2, top_fine_length=2.5,htop=0.15, htop2 =1.1)
 model = kr.base.Simulation(msh)
 model.basal_friction = False
 
@@ -73,7 +73,8 @@ model.params.Kic.value = args.Kic*1e3
 model.params.patm.value = 0.0
 model.params.crack_level_above_sea.value = args.level
 model.params.ρc = dolfinx.fem.Constant(model.msh,0.1*900)
-model.params.viscosity_tol.value = 1e-5
+model.params.viscosity_tol.value = 1e-6
+
 
 model.params.σt = args.strength*1e3
 model.params.dt.value = args.dtstar*model.params.τ_float
@@ -110,7 +111,7 @@ u_bc = lambda V: [
 
 
 def fixed(x):
-    return (x[0]<(args.nondim_length -0.3))*(x[1]<0.9) | (x[0]<(args.nondim_length - 2.0))
+    return (x[0]<(args.nondim_length -0.375))*(x[1]<0.875) | (x[0]<(args.nondim_length - 2.0))
 
 
 
@@ -153,7 +154,7 @@ if args.save_bp:
 
 # model.damage.w.sub(0).interpolate(end_cracks)
 
-model.damage_on = False
+model.damage_on = True
 
 
 for i in range(1,args.nt):
