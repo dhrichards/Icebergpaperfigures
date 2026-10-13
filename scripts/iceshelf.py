@@ -53,8 +53,27 @@ path = './outputs'
 os.makedirs(path, exist_ok=True)
 
 
+small_size = args.lstar/args.cellfactor
 
-msh = kr.meshes.fenicsx_refined_mesh(args.nondim_length, args.lstar/args.cellfactor, 0.4, large_size=0.2, top_fine_length=2.5,htop=0.15, htop2 =1.1)
+large_size_aim = 0.2
+n_div = int(np.log2(large_size_aim/small_size))
+large_size = small_size*2**n_div
+
+nx = int(args.nondim_length/large_size)
+nz = int(1/large_size)
+msh = mesh.create_rectangle(MPI.COMM_WORLD,
+                        [[0.0, 0.0],
+                        [args.nondim_length, 1.0]],
+                        [nx, nz],
+                        cell_type=mesh.CellType.triangle)
+
+def refined_area(x):
+    return (x[0] > (args.nondim_length - 0.4))\
+                |((x[1]>0.85)*(x[0]>(args.nondim_length-2.5)))
+
+msh = kr.meshes.refine_by_area(msh,refined_area,n_div)
+
+
 model = kr.base.Simulation(msh)
 model.basal_friction = False
 
@@ -106,21 +125,11 @@ def left_boundary(x):
 
 u_bc = lambda V: [
                             bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                            # bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
-                            ]
+]
 
-
-def fixed(x):
-    return (x[0]<(args.nondim_length -0.375))*(x[1]<0.875) | (x[0]<(args.nondim_length - 2.0))
-
-
-
-
-d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0),
-                #   bc.internal_bc(V, end_cracks, 1.0),
-                #   bc.internal_bc(V, lambda x: (x[1]>(1-height))*(1-end_cracks(x)), 0.0),
+d_bc = lambda V: [
+                bc.internal_bc(V, lambda x: ~refined_area(x), 0.0),
                 ]
-
 
 model.setup(kr.momentum.tensor.SemiLagrangianEpsilon,
                            kr.damage.higherorder.AT2, [u_bc, d_bc])
