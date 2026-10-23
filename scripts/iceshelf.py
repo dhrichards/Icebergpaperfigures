@@ -200,108 +200,43 @@ for i in range(1, args.nt):
     if comm.rank == 0:
         print("Iteration:", i, "time:", t / (24*60*60), "days")
 
-    failure_message = None
-    nits = 0
-
-    model.save_restart_state()
-    trial_dt = float(model.params.dt.value)
-    max_retries = 5
-
-    for retry in range(max_retries + 1):
-        save = retry > 0
-
-        try:
-            flag, nits = model.fixed_point(
-                save=save, stop_bottom=True
-            )
-            break
-
-        except (RuntimeError, PETSc.Error) as exc:
-            easy_steps = 0
-            PETSc.Sys.Print(f"Trial {retry} failed: {exc}")
-
-            model.restore_restart_state()
-
-            if retry == max_retries:
-                raise
-
-            trial_dt *= 0.5
-            model.params.dt.value = trial_dt
-
-            model.momentum.solver.destroy()
-            model.momentum.setup_solver()
-
-            PETSc.Sys.Print(
-                f"Retrying viscoelastically: retry {retry + 1}, "
-                f"dt={trial_dt:.6g}"
-            )
-
-    if i == 10:
+    if i == 11:
         d_frozen = fem.Function(model.damage.D, name="frozen_damage")
         d_frozen.interpolate(model.damage.w.sub(0))
         d_frozen.x.scatter_forward()
 
         bc_d = lambda V: [fem.dirichletbc(d_frozen,frozen_dofs,V),
-                          bc.internal_bc(V, lambda x: ~refined_area(x), 0.0)]
+                            bc.internal_bc(V, lambda x: ~refined_area(x), 0.0)]
         model.damage.update_bcs(bc_d)
+
+    model.save_restart_state()
+
+    try:
+        flag, nits = model.fixed_point(save=False, stop_bottom=True)
+
+    except (RuntimeError, PETSc.Error) as exc:
+        PETSc.Sys.Print(f"Ordinary solve failed: {exc}")
+        model.restore_restart_state()
+
+        model.momentum.solver.destroy()
+        model.momentum.setup_solver()
+
+        model.momentum.begin_damped_event(damping=1.0)
+        PETSc.Sys.Print("Trying damped fracture event")
+        
+        flag, nits = model.fixed_point(save=False, stop_bottom=True,damped_event=True)
         
 
-    # Ensure every rank takes the same output/exit branch.
     failed = comm.allreduce(flag != 1, op=MPI.LOR)
-
-    
+                
+        
 
     s = ufl.dev(model.momentum.σ)
     s_e2 = ufl.inner(s, s) / 2
     σ0 = es.cauchy_stress(model.momentum.ε_e, model.params.ν)
 
-    if failed:
-        messages = comm.allgather(failure_message)
 
-        if comm.rank == 0:
-            message = next((m for m in messages if m), None)
-            print(
-                f"Stopping at iteration {i}: "
-                f"{message or f'fixed_point returned flag {flag}'}",
-                flush=True,
-            )
-
-        model.momentum.w.x.scatter_forward()
-        model.damage.w.x.scatter_forward()
-
-        # Diagnostic output: do not rerun the constitutive update.
-        kr.plotting.write_xdmf(
-            path + "/" + filename + "failed" + str(i) + ".xdmf",
-            model.msh,
-            [
-                model.momentum.du,
-                model.damage.d,
-                model.damage.d_prev_it2,
-                model.damage.d_prev_it,
-                model.damage.d_prev_it3,
-                model.momentum.ψplus / model.params.ψcritstar,
-                model.momentum.ε_e,
-                s,
-                s_e2,
-                σ0,
-                model.momentum.σ,
-                model.momentum.fluidity_prev_it,
-                model.momentum.fluidity_used,
-                model.momentum.dq,
-
-            ],
-            [
-                "du", "d", "dprev2", "dprev", "dprev3",
-                "psi_plus", "eps_e", "s", "s_e2", "sig0", "sig",
-                "fluidity","fluidityused","dq"
-            ],
-            t=i,
-            quadrature_degree=model.quad_degree,
-        )
-
-        break
-
-    save_this_step = i == 1 or i % 10 == 0 or nits > 30
+    save_this_step = failed or i == 1 or i % 10 == 0 or nits > 30
 
     if args.save_bp and save_this_step:
         model.write_checkpoint(
@@ -310,36 +245,52 @@ for i in range(1, args.nt):
         )
 
     
-
     if save_this_step:
+
+        output_fields = {
+        "du": model.momentum.du,
+        "d": model.damage.d,
+        "dprev2": model.damage.d_prev_it2,
+        "dprev": model.damage.d_prev_it,
+        "dprev3": model.damage.d_prev_it3,
+        "psi_plus": model.momentum.ψplus / model.params.ψcritstar,
+        "eps_e": model.momentum.ε_e,
+        "s": s,
+        "s_e2": s_e2,
+        "sig0": σ0,
+        "sig": model.momentum.σ,
+        "fluidity": model.momentum.fluidity_prev_it,
+        "fluidityused": model.momentum.fluidity_used,
+        "dq": model.momentum.dq,
+            }
         kr.plotting.write_xdmf(
             path + "/" + filename + "run" + str(i) + ".xdmf",
             model.msh,
-            [
-                            model.momentum.du,
-                            model.damage.d,
-                            model.damage.d_prev_it2,
-                            model.damage.d_prev_it,
-                            model.damage.d_prev_it3,
-                            model.momentum.ψplus / model.params.ψcritstar,
-                            model.momentum.ε_e,
-                            s,
-                            s_e2,
-                            σ0,
-                            model.momentum.σ,
-                            model.momentum.fluidity_prev_it,
-                            model.momentum.fluidity_used,
-                            model.momentum.dq,
-            
-                        ],
-                        [
-                            "du", "d", "dprev2", "dprev", "dprev3",
-                            "psi_plus", "eps_e", "s", "s_e2", "sig0", "sig",
-                            "fluidity","fluidityused","dq"
-                        ],
+            list(output_fields.values()),
+            list(output_fields.keys()),
             t=i,
             quadrature_degree=model.quad_degree,
         )
+
+    if failed:
+        # Diagnostic output: do not rerun the constitutive update.
+        kr.plotting.write_xdmf(
+            path + "/" + filename + "failed" + str(i) + ".xdmf",
+            model.msh,
+            list(output_fields.values()),
+            list(output_fields.keys()),
+            t=i,
+            quadrature_degree=model.quad_degree,
+        )
+
+        if comm.rank == 0:
+            print(
+                f"Stopping at iteration {i}: "
+                f'fixed_point returned flag {flag}',
+                flush=True,
+            )
+    
+        break
 
 
     t += float(model.params.dt.value)
