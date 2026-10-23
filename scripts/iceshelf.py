@@ -4,13 +4,14 @@ import numpy as np
 import ufl
 import os
 import dolfinx
-from dolfinx import io, mesh
+from dolfinx import io, mesh, fem
 import kraken.parameters as kp
 import kraken.boundaryconditions as bc
 import kraken.numerics.maths_functions as mf
 import kraken.numerics.energy_splits as es
 import kraken as kr
 import argparse
+from petsc4py import PETSc
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--level", type=float, default=0.00, help="Water level in cracks above sea level (m)")
@@ -22,7 +23,7 @@ parser.add_argument("--suffix", type=str, default="", help="suffix for filename"
 parser.add_argument("--nt", type=int, default=10000, help="number of timesteps")
 parser.add_argument("--T", type=float, default=-10, help="Temperature in Celsius at top")
 parser.add_argument("--nondim_length", type=float, default=5, help="Length of iceberg")
-parser.add_argument("--tol", type=float, default=5e-6, help="Solver tolerance")
+parser.add_argument("--tol", type=float, default=5e-5, help="Solver tolerance")
 parser.add_argument("--min_its", type=int, default=1, help="Minimum number of solver iterations")
 parser.add_argument("--max_its", type=int, default=800, help="Maximum number of solver iterations")
 parser.add_argument("--Kic", type=float, default=100, help="Kic")
@@ -53,10 +54,31 @@ path = './outputs'
 os.makedirs(path, exist_ok=True)
 
 
+small_size = args.lstar/args.cellfactor
 
-msh = kr.meshes.fenicsx_refined_mesh(args.nondim_length, args.lstar/args.cellfactor, 0.3, large_size=0.2, top_fine_length=2.5, htop2 =1.1)
+large_size_aim = 0.2
+n_div = int(np.log2(large_size_aim/small_size))
+large_size = small_size*2**n_div
+
+nx = int(args.nondim_length/large_size)
+nz = int(1/large_size)
+msh = mesh.create_rectangle(MPI.COMM_WORLD,
+                        [[0.0, 0.0],
+                        [args.nondim_length, 1.0]],
+                        [nx, nz],
+                        cell_type=mesh.CellType.triangle)
+
+def refined_area(x):
+    return (x[0] > (args.nondim_length - 0.3))\
+                |((x[1]>0.85)*(x[0]>(args.nondim_length-3)))
+
+msh = kr.meshes.refine_by_area(msh,refined_area,n_div)
+
+
 model = kr.base.Simulation(msh)
 model.basal_friction = False
+model.order = 2
+model.quad_degree = 6
 
 model.tol = args.tol
 model.min_its = args.min_its
@@ -71,9 +93,9 @@ model.params.H.value = args.height
 # model.params.l.value = args.lstar*args.height
 model.params.Kic.value = args.Kic*1e3
 model.params.patm.value = 0.0
-model.params.crack_level_above_sea.value = args.level
+model.params.crack_level_above_sea.value = args.level*args.height
 model.params.ρc = dolfinx.fem.Constant(model.msh,0.1*900)
-model.params.viscosity_tol.value = 1e-5
+model.params.viscosity_tol.value = 1e-4
 
 model.params.σt = args.strength*1e3
 model.params.dt.value = args.dtstar*model.params.τ_float
@@ -103,26 +125,24 @@ def left_boundary(x):
     return np.isclose(x[0], 0)
 
 
+
+
+
+
+
 u_bc = lambda V: [
-                            bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                            # bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
-                            ]
+                            bc.get_zero_bc(V.sub(0), left_boundary),
+]
 
-
-def fixed(x):
-    return (x[0]<(args.nondim_length -0.3))*(x[1]<0.9) | (x[0]<(args.nondim_length - 2.0))
-
-
-
-
-d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0),
-                #   bc.internal_bc(V, end_cracks, 1.0),
-                #   bc.internal_bc(V, lambda x: (x[1]>(1-height))*(1-end_cracks(x)), 0.0),
+d_bc = lambda V: [
+                bc.internal_bc(V, lambda x: ~refined_area(x), 0.0),
                 ]
 
-
-model.setup(kr.momentum.tensor.SemiLagrangianEpsilon,
+model.setup(kr.momentum.tensorquadrature.Tensor,
                            kr.damage.higherorder.AT2, [u_bc, d_bc])
+
+model.momentum.initial_infinite_shelf()
+
 
 model.momentum.mesh_smoothing = bool(args.mesh_smoothing)
 
@@ -140,7 +160,10 @@ def end_cracks(x):
         val += crack(x,x_c,height)
     return val
 
-
+frozen_dofs = fem.locate_dofs_geometrical(
+    (model.damage.W.sub(0), model.damage.D),
+    lambda x: x[1]>0.95,
+)
 
 
 t = 0.0
@@ -148,73 +171,191 @@ model.momentum.solve()
 if args.save_bp:
     model.write_checkpoint(path + "/" + filename +".bp", t)
 
-
-
-
-# model.damage.w.sub(0).interpolate(end_cracks)
-
+model.momentum.creep_newton_weight.value = 1.0
+model.params.dt.value = 100*model.params.τ_float
 model.damage_on = False
-
-
-for i in range(1,args.nt):
-
+for i in range(100):
     if MPI.COMM_WORLD.rank == 0:
-        print("Iteration: ", i, "time: ", t/(24*60*60), "days")
+            print("Relaxation it : ", i)
+    model.momentum.solve()
+    model.momentum.timestep()
 
-    flag,nits = model.fixed_point(save=True, stop_bottom=False)
+# # model.damage.w.sub(0).interpolate(end_cracks)
 
-    t += model.params.dt.value
-    if args.save_bp:
-        if i == 1 or i % 20 == 0 or flag == -1 or nits > 30:
-            model.write_checkpoint(path + "/" + filename +".bp", t)
+model.damage_on = True
+model.params.dt.value = args.dtstar*model.params.τ_float
+model.momentum.creep_newton_weight.value = 0
+
+newtonfactor=0.0
+comm = model.msh.comm
 
 
-    # η0 = mf.viscosity(ufl.dev(mf.ε(model.momentum.vel_prev_it)), 3.0, 1e-19)
+easy_steps = 0
+easy_nits = 3
+easy_steps_required = 5
+growth_factor = 1.25
 
+for i in range(1, args.nt):
 
-    if i ==1 or i % 1 == 0 or flag == -1 or nits > 30:
-        kr.plotting.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
-                                model.msh, [model.momentum.u,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,model.damage.d_prev_it3,
-                                        # model.momentum.u_v, model.momentum.u_e,
-                                        model.momentum.ψplus/model.params.ψcritstar,
-                                        model.momentum.ε_e,
-                                        model.params.Gc,
-                                        # model.momentum.crack_pressure(model.momentum.du),
-                                        # η0,
-                                        ],
-                                        ["u","d","dprev2","dprev","dprev3",
-                                        # "uv","ue",
-                                        "psi_plus",
-                                        "eps_e",
-                                        "Gc",
-                                        # "p_c",
-                                        # "eta",
-                                        ],
-                                    t=i)
+    if comm.rank == 0:
+        print("Iteration:", i, "time:", t / (24*60*60), "days")
+
+    failure_message = None
+    nits = 0
+
+    model.save_restart_state()
+    trial_dt = float(model.params.dt.value)
+    max_retries = 5
+
+    for retry in range(max_retries + 1):
+        save = retry > 0
+
+        try:
+            flag, nits = model.fixed_point(
+                save=save, stop_bottom=True
+            )
+            break
+
+        except (RuntimeError, PETSc.Error) as exc:
+            easy_steps = 0
+            PETSc.Sys.Print(f"Trial {retry} failed: {exc}")
+
+            model.restore_restart_state()
+
+            if retry == max_retries:
+                raise
+
+            trial_dt *= 0.5
+            model.params.dt.value = trial_dt
+
+            model.momentum.solver.destroy()
+            model.momentum.setup_solver()
+
+            PETSc.Sys.Print(
+                f"Retrying viscoelastically: retry {retry + 1}, "
+                f"dt={trial_dt:.6g}"
+            )
+
+    if i == 10:
+        d_frozen = fem.Function(model.damage.D, name="frozen_damage")
+        d_frozen.interpolate(model.damage.w.sub(0))
+        d_frozen.x.scatter_forward()
+
+        bc_d = lambda V: [fem.dirichletbc(d_frozen,frozen_dofs,V),
+                          bc.internal_bc(V, lambda x: ~refined_area(x), 0.0)]
+        model.damage.update_bcs(bc_d)
         
-    if flag == -1:
-        break
+
+    # Ensure every rank takes the same output/exit branch.
+    failed = comm.allreduce(flag != 1, op=MPI.LOR)
 
     
-    model.timestep()
-    # model.momentum.timestep()
 
-kr.plotting.write_xdmf(path + "/" + filename +"end.xdmf",
-                                model.msh, [model.momentum.u,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,model.damage.d_prev_it3,
-                                        model.momentum.u_v, model.momentum.u_e,
-                                        model.momentum.ψplus/model.params.ψcritstar,
-                                        model.momentum.ε_e,
-                                        model.params.Gc,
-                                        # η0,
-                                        ],
-                                        ["u","d","dprev2","dprev","dprev3",
-                                        "uv","ue",
-                                        "psi_plus",
-                                        "eps_e",
-                                        "Gc",
-                                        # "eta",
-                                        ],
-                                    t=i)
+    s = ufl.dev(model.momentum.σ)
+    s_e2 = ufl.inner(s, s) / 2
+    σ0 = es.cauchy_stress(model.momentum.ε_e, model.params.ν)
+
+    if failed:
+        messages = comm.allgather(failure_message)
+
+        if comm.rank == 0:
+            message = next((m for m in messages if m), None)
+            print(
+                f"Stopping at iteration {i}: "
+                f"{message or f'fixed_point returned flag {flag}'}",
+                flush=True,
+            )
+
+        model.momentum.w.x.scatter_forward()
+        model.damage.w.x.scatter_forward()
+
+        # Diagnostic output: do not rerun the constitutive update.
+        kr.plotting.write_xdmf(
+            path + "/" + filename + "failed" + str(i) + ".xdmf",
+            model.msh,
+            [
+                model.momentum.du,
+                model.damage.d,
+                model.damage.d_prev_it2,
+                model.damage.d_prev_it,
+                model.damage.d_prev_it3,
+                model.momentum.ψplus / model.params.ψcritstar,
+                model.momentum.ε_e,
+                s,
+                s_e2,
+                σ0,
+                model.momentum.σ,
+                model.momentum.fluidity_prev_it,
+                model.momentum.fluidity_used,
+                model.momentum.dq,
+
+            ],
+            [
+                "du", "d", "dprev2", "dprev", "dprev3",
+                "psi_plus", "eps_e", "s", "s_e2", "sig0", "sig",
+                "fluidity","fluidityused","dq"
+            ],
+            t=i,
+            quadrature_degree=model.quad_degree,
+        )
+
+        break
+
+    save_this_step = i == 1 or i % 10 == 0 or nits > 30
+
+    if args.save_bp and save_this_step:
+        model.write_checkpoint(
+            path + "/" + filename + ".bp",
+            t,
+        )
+
+    
+
+    if save_this_step:
+        kr.plotting.write_xdmf(
+            path + "/" + filename + "run" + str(i) + ".xdmf",
+            model.msh,
+            [
+                            model.momentum.du,
+                            model.damage.d,
+                            model.damage.d_prev_it2,
+                            model.damage.d_prev_it,
+                            model.damage.d_prev_it3,
+                            model.momentum.ψplus / model.params.ψcritstar,
+                            model.momentum.ε_e,
+                            s,
+                            s_e2,
+                            σ0,
+                            model.momentum.σ,
+                            model.momentum.fluidity_prev_it,
+                            model.momentum.fluidity_used,
+                            model.momentum.dq,
+            
+                        ],
+                        [
+                            "du", "d", "dprev2", "dprev", "dprev3",
+                            "psi_plus", "eps_e", "s", "s_e2", "sig0", "sig",
+                            "fluidity","fluidityused","dq"
+                        ],
+            t=i,
+            quadrature_degree=model.quad_degree,
+        )
+
+
+    t += float(model.params.dt.value)
+    model.momentum.timestep()
+
+    # # Count only easy steps that needed no retries.
+    # if flag == 1 and retry == 0 and nits <= easy_nits:
+    #     easy_steps += 1
+    # else:
+    #     easy_steps = 0
+
+    # if easy_steps >= easy_steps_required:
+    #     model.params.dt.value*=growth_factor
+    #     easy_steps =0
+    #     PETSc.Sys.Print(f"Increasing dt")
+
 
 if MPI.COMM_WORLD.rank == 0:
     print("time it:",  i)
