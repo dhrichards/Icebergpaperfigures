@@ -171,29 +171,45 @@ model.momentum.solve()
 if args.save_bp:
     model.write_checkpoint(path + "/" + filename +".bp", t)
 
-model.momentum.creep_newton_weight.value = 1.0
-model.params.dt.value = 100*model.params.τ_float
-model.damage_on = False
-for i in range(100):
-    if MPI.COMM_WORLD.rank == 0:
-            print("Relaxation it : ", i)
-    model.momentum.solve()
-    model.momentum.timestep()
+# model.momentum.creep_newton_weight.value = 1.0
+# model.params.dt.value = 100*model.params.τ_float
+# model.damage_on = False
+# for i in range(100):
+#     if MPI.COMM_WORLD.rank == 0:
+#             print("Relaxation it : ", i)
+#     model.momentum.solve()
+#     model.momentum.timestep()
 
-# # model.damage.w.sub(0).interpolate(end_cracks)
+# # # model.damage.w.sub(0).interpolate(end_cracks)
 
-model.damage_on = True
-model.params.dt.value = args.dtstar*model.params.τ_float
-model.momentum.creep_newton_weight.value = 0
+# model.damage_on = True
+# model.params.dt.value = args.dtstar*model.params.τ_float
+# model.momentum.creep_newton_weight.value = 0
 
-newtonfactor=0.0
 comm = model.msh.comm
 
 
-easy_steps = 0
-easy_nits = 3
-easy_steps_required = 5
-growth_factor = 1.25
+s = ufl.dev(model.momentum.σ)
+s_e2 = ufl.inner(s, s) / 2
+σ0 = es.cauchy_stress(model.momentum.ε_e, model.params.ν)
+
+output_fields = {
+"du": model.momentum.du,
+"d": model.damage.d,
+"dprev2": model.damage.d_prev_it2,
+"dprev": model.damage.d_prev_it,
+"dprev3": model.damage.d_prev_it3,
+"psi_plus": model.momentum.ψplus / model.params.ψcritstar,
+"eps_e": model.momentum.ε_e,
+"s": s,
+"s_e2": s_e2,
+"sig0": σ0,
+"sig": model.momentum.σ,
+"fluidity": model.momentum.fluidity_prev_it,
+"fluidityused": model.momentum.fluidity_used,
+"dq": model.momentum.dq,
+    }
+
 
 for i in range(1, args.nt):
 
@@ -209,60 +225,24 @@ for i in range(1, args.nt):
                             bc.internal_bc(V, lambda x: ~refined_area(x), 0.0)]
         model.damage.update_bcs(bc_d)
 
-    model.save_restart_state()
+    
+    flag, nits = model.solve_timestep(save=False, stop_bottom=True)
 
-    try:
-        flag, nits = model.fixed_point(save=False, stop_bottom=True)
+    failed = comm.allreduce(flag in (-1, 2), op=MPI.LOR)
+    bottom_reached = comm.allreduce(flag in (3, 4), op=MPI.LOR)
 
-    except (RuntimeError, PETSc.Error) as exc:
-        PETSc.Sys.Print(f"Ordinary solve failed: {exc}")
-        model.restore_restart_state()
-
-        model.momentum.solver.destroy()
-        model.momentum.setup_solver()
-
-        model.momentum.begin_damped_event(damping=1.0)
-        PETSc.Sys.Print("Trying damped fracture event")
-        
-        flag, nits = model.fixed_point(save=False, stop_bottom=True,damped_event=True)
-        
-
-    failed = comm.allreduce(flag != 1, op=MPI.LOR)
+    save_this_step = (
+        failed or bottom_reached
+        or i == 1 or i % 10 == 0 or nits > 30
+    )
                 
-        
-
-    s = ufl.dev(model.momentum.σ)
-    s_e2 = ufl.inner(s, s) / 2
-    σ0 = es.cauchy_stress(model.momentum.ε_e, model.params.ν)
-
-
-    save_this_step = failed or i == 1 or i % 10 == 0 or nits > 30
-
     if args.save_bp and save_this_step:
         model.write_checkpoint(
             path + "/" + filename + ".bp",
             t,
         )
-
     
     if save_this_step:
-
-        output_fields = {
-        "du": model.momentum.du,
-        "d": model.damage.d,
-        "dprev2": model.damage.d_prev_it2,
-        "dprev": model.damage.d_prev_it,
-        "dprev3": model.damage.d_prev_it3,
-        "psi_plus": model.momentum.ψplus / model.params.ψcritstar,
-        "eps_e": model.momentum.ε_e,
-        "s": s,
-        "s_e2": s_e2,
-        "sig0": σ0,
-        "sig": model.momentum.σ,
-        "fluidity": model.momentum.fluidity_prev_it,
-        "fluidityused": model.momentum.fluidity_used,
-        "dq": model.momentum.dq,
-            }
         kr.plotting.write_xdmf(
             path + "/" + filename + "run" + str(i) + ".xdmf",
             model.msh,
@@ -272,7 +252,7 @@ for i in range(1, args.nt):
             quadrature_degree=model.quad_degree,
         )
 
-    if failed:
+    if failed or bottom_reached:
         # Diagnostic output: do not rerun the constitutive update.
         kr.plotting.write_xdmf(
             path + "/" + filename + "failed" + str(i) + ".xdmf",
