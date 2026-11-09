@@ -14,9 +14,9 @@ import argparse
 from petsc4py import PETSc
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--level", type=float, default=0.00, help="Water level in cracks above sea level (m)")
-parser.add_argument("--lstar", type=float, default=0.005, help="Regularization length scale in meters")
-parser.add_argument("--dtstar", type=float, default=1.0, help="Non-dimensional time step in days")
+parser.add_argument("--level", type=float, default=0.00, help="Water level in cracks above non dimensional")
+parser.add_argument("--lstar", type=float, default=0.005, help="Regularization length scale")
+parser.add_argument("--dtstar", type=float, default=1.0, help="Non-dimensional time step")
 parser.add_argument("--cellfactor", type=float, default=1, help="Mesh cell size factor")
 parser.add_argument("--height", type=float, default=500, help="Height of iceberg in meters")
 parser.add_argument("--suffix", type=str, default="", help="suffix for filename")
@@ -29,7 +29,7 @@ parser.add_argument("--max_its", type=int, default=800, help="Maximum number of 
 parser.add_argument("--Kic", type=float, default=100, help="Kic")
 parser.add_argument("--strength", type=float, default=200, help="Tensile strength at 0C")
 parser.add_argument("--n", type=float, default=3.0, help="Glens law exponent")
-parser.add_argument("--save_bp", type=bool, default=False, help="Save bp files")
+parser.add_argument("--save_bp", action="store_true")
 parser.add_argument("--lfactor", type=float, default=2.0, help="Multiply l by in lower part of domain")
 parser.add_argument("--mesh_smoothing", type=int, default=0, help="Mesh smoothing between timesteps")
 
@@ -94,10 +94,10 @@ model.params.H.value = args.height
 model.params.Kic.value = args.Kic*1e3
 model.params.patm.value = 0.0
 model.params.crack_level_above_sea.value = args.level*args.height
-model.params.ρc = dolfinx.fem.Constant(model.msh,0.1*900)
+model.params.ρc = 0.1*900
 model.params.viscosity_tol.value = 1e-4
 
-model.params.σt = args.strength*1e3
+model.params.σt.value = args.strength*1e3
 model.params.dt.value = args.dtstar*model.params.τ_float
 
 def smoothstep(x, x_c, width):
@@ -274,7 +274,7 @@ for i in range(1, args.nt):
 
 
     t += float(model.params.dt.value)
-    model.momentum.timestep()
+    model.timestep()
 
     # # Count only easy steps that needed no retries.
     # if flag == 1 and retry == 0 and nits <= easy_nits:
