@@ -20,18 +20,18 @@ parser.add_argument("--dtstar", type=float, default=1.0, help="Non-dimensional t
 parser.add_argument("--cellfactor", type=float, default=1, help="Mesh cell size factor")
 parser.add_argument("--height", type=float, default=500, help="Height of iceberg in meters")
 parser.add_argument("--suffix", type=str, default="", help="suffix for filename")
-parser.add_argument("--nt", type=int, default=10000, help="number of timesteps")
+parser.add_argument("--nt", type=int, default=50000, help="number of timesteps")
 parser.add_argument("--T", type=float, default=-10, help="Temperature in Celsius at top")
 parser.add_argument("--nondim_length", type=float, default=5, help="Length of iceberg")
 parser.add_argument("--tol", type=float, default=5e-5, help="Solver tolerance")
 parser.add_argument("--min_its", type=int, default=1, help="Minimum number of solver iterations")
 parser.add_argument("--max_its", type=int, default=800, help="Maximum number of solver iterations")
 parser.add_argument("--Kic", type=float, default=100, help="Kic")
-parser.add_argument("--strength", type=float, default=200, help="Tensile strength at 0C")
+parser.add_argument("--strength", type=float, default=100, help="Tensile strength at 0C")
 parser.add_argument("--n", type=float, default=3.0, help="Glens law exponent")
 parser.add_argument("--save_bp", action="store_true")
 parser.add_argument("--lfactor", type=float, default=2.0, help="Multiply l by in lower part of domain")
-parser.add_argument("--mesh_smoothing", type=int, default=0, help="Mesh smoothing between timesteps")
+
 
 args = parser.parse_args()
 
@@ -46,7 +46,6 @@ filename = "iceshelf_L" + str(args.nondim_length) + "_H" + str(args.height) \
                         + "_cellfactor" + str(args.cellfactor)\
                         + "_T" + str(abs(args.T)) \
                         + "_lfactor" + str(args.lfactor) \
-                        + "_meshsmoothing" + str(args.mesh_smoothing) \
                         + "_" + args.suffix + "_"
 
 
@@ -95,7 +94,6 @@ model.params.Kic.value = args.Kic*1e3
 model.params.patm.value = 0.0
 model.params.crack_level_above_sea.value = args.level*args.height
 model.params.ρc = 0.1*900
-model.params.viscosity_tol.value = 1e-4
 
 model.params.σt.value = args.strength*1e3
 model.params.dt.value = args.dtstar*model.params.τ_float
@@ -139,12 +137,11 @@ d_bc = lambda V: [
                 ]
 
 model.setup(kr.momentum.tensorquadrature.Tensor,
-                           kr.damage.higherorder.AT2, [u_bc, d_bc])
+                           kr.damage.higherorder.AT1Bounded, [u_bc, d_bc])
 
 model.momentum.initial_infinite_shelf()
 
 
-model.momentum.mesh_smoothing = bool(args.mesh_smoothing)
 
 def crack(x,x_c,height=0.06):
     width = args.lstar/args.cellfactor*1
@@ -160,16 +157,15 @@ def end_cracks(x):
         val += crack(x,x_c,height)
     return val
 
-frozen_dofs = fem.locate_dofs_geometrical(
-    (model.damage.W.sub(0), model.damage.D),
-    lambda x: x[1]>0.95,
-)
+# model.damage.w.sub(0).interpolate(end_cracks)
+
+# frozen_dofs = fem.locate_dofs_geometrical(
+#     (model.damage.W.sub(0), model.damage.D),
+#     lambda x: x[1]>0.92,
+# )
 
 
 t = 0.0
-model.momentum.solve()
-if args.save_bp:
-    model.write_checkpoint(path + "/" + filename +".bp", t)
 
 # model.momentum.creep_newton_weight.value = 1.0
 # model.params.dt.value = 100*model.params.τ_float
@@ -180,7 +176,6 @@ if args.save_bp:
 #     model.momentum.solve()
 #     model.momentum.timestep()
 
-# # # model.damage.w.sub(0).interpolate(end_cracks)
 
 # model.damage_on = True
 # model.params.dt.value = args.dtstar*model.params.τ_float
@@ -216,14 +211,14 @@ for i in range(1, args.nt):
     if comm.rank == 0:
         print("Iteration:", i, "time:", t / (24*60*60), "days")
 
-    if i == 11:
-        d_frozen = fem.Function(model.damage.D, name="frozen_damage")
-        d_frozen.interpolate(model.damage.w.sub(0))
-        d_frozen.x.scatter_forward()
+    # if i == 11:
+    #     d_frozen = fem.Function(model.damage.D, name="frozen_damage")
+    #     d_frozen.interpolate(model.damage.w.sub(0))
+    #     d_frozen.x.scatter_forward()
 
-        bc_d = lambda V: [fem.dirichletbc(d_frozen,frozen_dofs,V),
-                            bc.internal_bc(V, lambda x: ~refined_area(x), 0.0)]
-        model.damage.update_bcs(bc_d)
+    #     bc_d = lambda V: [fem.dirichletbc(d_frozen,frozen_dofs,V),
+    #                         bc.internal_bc(V, lambda x: ~refined_area(x), 0.0)]
+    #     model.damage.update_bcs(bc_d)
 
     
     flag, nits = model.solve_timestep(save=False, stop_bottom=True)
@@ -233,7 +228,7 @@ for i in range(1, args.nt):
 
     save_this_step = (
         failed or bottom_reached
-        or i == 1 or i % 10 == 0 or nits > 30
+        or i == 1 or i % 300 == 0 or nits > 30
     )
                 
     if args.save_bp and save_this_step:
@@ -262,6 +257,11 @@ for i in range(1, args.nt):
             t=i,
             quadrature_degree=model.quad_degree,
         )
+
+        model.write_checkpoint(
+                    path + "/" + filename + "end.bp",
+                    t, append=False
+                )
 
         if comm.rank == 0:
             print(
