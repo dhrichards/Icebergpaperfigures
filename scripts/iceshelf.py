@@ -11,11 +11,12 @@ import kraken.numerics.maths_functions as mf
 import kraken.numerics.energy_splits as es
 import kraken as kr
 import argparse
+import graded_mesh
 from petsc4py import PETSc
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--level", type=float, default=0.00, help="Water level in cracks above non dimensional")
-parser.add_argument("--lstar", type=float, default=0.005, help="Regularization length scale")
+parser.add_argument("--l", type=float, default=5, help="Regularization length scale")
 parser.add_argument("--dtstar", type=float, default=1.0, help="Non-dimensional time step")
 parser.add_argument("--cellfactor", type=float, default=1, help="Mesh cell size factor")
 parser.add_argument("--height", type=float, default=500, help="Height of iceberg in meters")
@@ -25,35 +26,23 @@ parser.add_argument("--T", type=float, default=-10, help="Temperature in Celsius
 parser.add_argument("--nondim_length", type=float, default=5, help="Length of iceberg")
 parser.add_argument("--tol", type=float, default=5e-5, help="Solver tolerance")
 parser.add_argument("--min_its", type=int, default=1, help="Minimum number of solver iterations")
-parser.add_argument("--max_its", type=int, default=800, help="Maximum number of solver iterations")
+parser.add_argument("--max_its", type=int, default=300, help="Maximum number of solver iterations")
 parser.add_argument("--Kic", type=float, default=100, help="Kic")
 parser.add_argument("--strength", type=float, default=100, help="Tensile strength at 0C")
 parser.add_argument("--n", type=float, default=3.0, help="Glens law exponent")
 parser.add_argument("--save_bp", action="store_true")
-parser.add_argument("--lfactor", type=float, default=2.0, help="Multiply l by in lower part of domain")
 
 
 args = parser.parse_args()
 
 
-filename = "iceshelf_L" + str(args.nondim_length) + "_H" + str(args.height) \
-                        + "_l" + str(args.lstar) \
-                        + "_dtstar" + str(args.dtstar) \
-                        + "_sigmac" + str(args.strength) \
-                        + "_n" + str(args.n) \
-                        + "_level" + str(args.level) \
-                        + "_Kic" + str(args.Kic)\
-                        + "_cellfactor" + str(args.cellfactor)\
-                        + "_T" + str(abs(args.T)) \
-                        + "_lfactor" + str(args.lfactor) \
-                        + "_" + args.suffix + "_"
 
 
 path = './outputs'
 os.makedirs(path, exist_ok=True)
 
-
-small_size = args.lstar/args.cellfactor
+lstar = args.l/args.height
+small_size = lstar/args.cellfactor
 
 large_size_aim = 0.2
 n_div = int(np.log2(large_size_aim/small_size))
@@ -89,7 +78,7 @@ model.params.T.value = args.T
 model.params.A0.value = mf.rate_factor_np(args.T)*(0.5*0.1*900*9.8*500)**(3-args.n)
 model.params.n.value = args.n
 model.params.H.value = args.height
-# model.params.l.value = args.lstar*args.height
+model.params.l.value = args.l
 model.params.Kic.value = args.Kic*1e3
 model.params.patm.value = 0.0
 model.params.crack_level_above_sea.value = args.level*args.height
@@ -98,16 +87,35 @@ model.params.ρc = 0.1*900
 model.params.σt.value = args.strength*1e3
 model.params.dt.value = args.dtstar*model.params.τ_float
 
-def smoothstep(x, x_c, width):
-    return 0.5*(1 + ufl.tanh((x-x_c)/width))
 
-def smoothtransition(a, b, x, x_c, width):
-    return a + (b-a)*smoothstep(x, x_c, width)
+##Overload Kic for AT1
+#Higher order
+p = model.params
+p.Kic = ufl.sqrt(2.0 * p.l * p.σt**2 / (1 - p.ν**2))
+Kic_value = np.sqrt(2.0 * args.l * (args.strength*1e3)**2 / (1 - p.ν.value**2))/1e3
 
-if args.lfactor>1.0:
-    model.params.l = smoothtransition(args.lstar*args.height*args.lfactor, args.lstar*args.height, x[1], 1 - 0.125, 0.05)
-else:
-    model.params.l.value = args.lstar*args.height
+#Lower order
+# p.Kic = ufl.sqrt(
+#     (8.0/3.0) * (1-p.ge_tol) * p.l * p.σt**2 / (1-p.ν**2)
+# )
+# Kic_value = args.Kic
+
+
+filename = (
+    f"iceshelf_L{args.nondim_length:g}"
+    f"_H{args.height:g}"
+    f"_l{args.l:g}"
+    f"_dtstar{args.dtstar:g}"
+    f"_sigmac{args.strength:g}"
+    f"_n{args.n:g}"
+    f"_level{args.level:g}"
+    f"_Kic{Kic_value:g}"
+    f"_cellfactor{args.cellfactor:g}"
+    f"_T{abs(args.T):g}"
+    f"_lfactor{args.lfactor:g}"
+    f"_{args.suffix}_"
+)
+
 
 if MPI.COMM_WORLD.rank == 0:
     print("ucstar: ", model.params.ucstar_float )
@@ -136,7 +144,8 @@ d_bc = lambda V: [
                 bc.internal_bc(V, lambda x: ~refined_area(x), 0.0),
                 ]
 
-model.setup(kr.momentum.tensorquadrature.Tensor,
+
+model.setup(kr.momentum.tensorlinearised.Tensor,
                            kr.damage.higherorder.AT1Bounded, [u_bc, d_bc])
 
 model.momentum.initial_infinite_shelf()
@@ -166,20 +175,6 @@ def end_cracks(x):
 
 
 t = 0.0
-
-# model.momentum.creep_newton_weight.value = 1.0
-# model.params.dt.value = 100*model.params.τ_float
-# model.damage_on = False
-# for i in range(100):
-#     if MPI.COMM_WORLD.rank == 0:
-#             print("Relaxation it : ", i)
-#     model.momentum.solve()
-#     model.momentum.timestep()
-
-
-# model.damage_on = True
-# model.params.dt.value = args.dtstar*model.params.τ_float
-# model.momentum.creep_newton_weight.value = 0
 
 comm = model.msh.comm
 
@@ -276,16 +271,11 @@ for i in range(1, args.nt):
     t += float(model.params.dt.value)
     model.timestep()
 
-    # # Count only easy steps that needed no retries.
-    # if flag == 1 and retry == 0 and nits <= easy_nits:
-    #     easy_steps += 1
-    # else:
-    #     easy_steps = 0
 
-    # if easy_steps >= easy_steps_required:
-    #     model.params.dt.value*=growth_factor
-    #     easy_steps =0
-    #     PETSc.Sys.Print(f"Increasing dt")
+    model.params.dt.value = min(
+        1.1 * float(model.params.dt.value),
+        args.dtstar * model.params.τ_float,
+        )
 
 
 if MPI.COMM_WORLD.rank == 0:

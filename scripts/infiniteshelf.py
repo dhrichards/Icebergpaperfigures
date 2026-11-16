@@ -89,7 +89,7 @@ u_x = dtstar*nondim_length*(1/4)**3
 
 u_bc = lambda V: [
                     bc.get_zero_bc(V.sub(0), left_boundary),
-                    bc.get_bc(V.sub(0), right_boundary, u_x),
+                    bc.get_zero_bc(V.sub(0), right_boundary)
                     ]
 
 
@@ -98,11 +98,15 @@ d_bc = lambda V: [
                     bc.get_zero_bc(V, right_boundary),
                     ]
 
-
-model.setup(kr.momentum.tensorquadrature.Tensor,
-                           kr.damage.higherorder.AT2, [u_bc, d_bc])
+model.setup(
+    kr.momentum.elastic.Elasticity,
+    kr.damage.higherorder.AT2,
+    [u_bc, d_bc],
+)
 
 model.momentum.initial_infinite_shelf()
+
+flag, nits = model.fixed_point(save=True)
 
 
 t = 0.0
@@ -110,7 +114,7 @@ if args.save_bp:
     model.write_checkpoint(path + "/" + filename +".bp", t, append=False)
 
 
-model.damage_on = True
+
 
 
 output_fields = {
@@ -121,36 +125,16 @@ output_fields = {
 "dprev3": model.damage.d_prev_it3,
 "psi_plus": model.momentum.ψplus / model.params.ψcritstar,
 "eps_e": model.momentum.ε_e,
-"sig": model.momentum.σ,
-"fluidity": model.momentum.fluidity_prev_it,
-"fluidityused": model.momentum.fluidity_used,
-"dq": model.momentum.dq,
     }
 
 
-for i in range(1, args.nt+1):
-    t += model.params.dt.value
-    flag,nits = model.fixed_point(save=True)
-
-
-    if args.save_bp:
-        model.write_checkpoint(path + "/" + filename +".bp", t)
-
-    kr.plotting.write_xdmf(
-                path + "/" + filename + "run" + str(i) + ".xdmf",
-                model.msh,
-                list(output_fields.values()),
-                list(output_fields.keys()),
-                t=i,
-                quadrature_degree=model.quad_degree,
-            )
-    
-
-    model.timestep()
-        
- 
-if MPI.COMM_WORLD.rank == 0:
-    print(path + "/" + filename)
-
+kr.plotting.write_xdmf(
+            path + "/" + filename + ".xdmf",
+            model.msh,
+            list(output_fields.values()),
+            list(output_fields.keys()),
+            t=0,
+            quadrature_degree=model.quad_degree,
+        )
 
    
