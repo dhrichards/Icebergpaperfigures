@@ -26,7 +26,7 @@ parser.add_argument("--T", type=float, default=-10, help="Temperature in Celsius
 parser.add_argument("--nondim_length", type=float, default=5, help="Length of iceberg")
 parser.add_argument("--tol", type=float, default=5e-5, help="Solver tolerance")
 parser.add_argument("--min_its", type=int, default=1, help="Minimum number of solver iterations")
-parser.add_argument("--max_its", type=int, default=300, help="Maximum number of solver iterations")
+parser.add_argument("--max_its", type=int, default=100, help="Maximum number of solver iterations")
 parser.add_argument("--Kic", type=float, default=100, help="Kic")
 parser.add_argument("--strength", type=float, default=100, help="Tensile strength at 0C")
 parser.add_argument("--n", type=float, default=3.0, help="Glens law exponent")
@@ -70,7 +70,7 @@ model.quad_degree = 6
 
 model.tol = args.tol
 model.min_its = args.min_its
-model.max_its = args.max_its
+model.max_its = 300
 
 x = ufl.SpatialCoordinate(msh)
 z = x[msh.geometry.dim-1]
@@ -112,7 +112,6 @@ filename = (
     f"_Kic{Kic_value:g}"
     f"_cellfactor{args.cellfactor:g}"
     f"_T{abs(args.T):g}"
-    f"_lfactor{args.lfactor:g}"
     f"_{args.suffix}_"
 )
 
@@ -123,16 +122,9 @@ if MPI.COMM_WORLD.rank == 0:
     print(path + "/" + filename)
 
 
-# model.params.crack_level_above_sea = smoothtransition(
-#     0,args.level, x[1], 1 - 0.25, 0.05
-# )
 
 def left_boundary(x):
     return np.isclose(x[0], 0)
-
-
-
-
 
 
 
@@ -145,33 +137,11 @@ d_bc = lambda V: [
                 ]
 
 
-model.setup(kr.momentum.tensorlinearised.Tensor,
+model.setup(kr.momentum.tensorquadrature.Tensor,
                            kr.damage.higherorder.AT1Bounded, [u_bc, d_bc])
 
 model.momentum.initial_infinite_shelf()
 
-
-
-def crack(x,x_c,height=0.06):
-    width = args.lstar/args.cellfactor*1
-    return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>(1-height))
-
-# end_crack_x_cs = np.linspace(args.nondim_length-2, args.nondim_length-0.15, 20)
-end_crack_x_cs = args.nondim_length - np.arange(0.175,2,0.1)
-
-height = 0.08
-def end_cracks(x):
-    val = np.zeros(x.shape[1],dtype=bool)
-    for x_c in end_crack_x_cs:
-        val += crack(x,x_c,height)
-    return val
-
-# model.damage.w.sub(0).interpolate(end_cracks)
-
-# frozen_dofs = fem.locate_dofs_geometrical(
-#     (model.damage.W.sub(0), model.damage.D),
-#     lambda x: x[1]>0.92,
-# )
 
 
 t = 0.0
@@ -206,14 +176,8 @@ for i in range(1, args.nt):
     if comm.rank == 0:
         print("Iteration:", i, "time:", t / (24*60*60), "days")
 
-    # if i == 11:
-    #     d_frozen = fem.Function(model.damage.D, name="frozen_damage")
-    #     d_frozen.interpolate(model.damage.w.sub(0))
-    #     d_frozen.x.scatter_forward()
-
-    #     bc_d = lambda V: [fem.dirichletbc(d_frozen,frozen_dofs,V),
-    #                         bc.internal_bc(V, lambda x: ~refined_area(x), 0.0)]
-    #     model.damage.update_bcs(bc_d)
+    if i == 2:
+        model.max_its = args.max_its
 
     
     flag, nits = model.solve_timestep(save=False, stop_bottom=True)
