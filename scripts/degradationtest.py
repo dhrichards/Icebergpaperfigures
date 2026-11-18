@@ -76,7 +76,7 @@ msh = mesh.create_rectangle(
 
 
 def refined_area(x):
-    return (x[0] > args.nondim_length - 2.5) & (x[1] > 0.75)
+    return (x[1] > 0.75)
 
 
 if n_div:

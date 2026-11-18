@@ -26,7 +26,7 @@ parser.add_argument("--T", type=float, default=-10, help="Temperature in Celsius
 parser.add_argument("--nondim_length", type=float, default=5, help="Length of iceberg")
 parser.add_argument("--tol", type=float, default=5e-5, help="Solver tolerance")
 parser.add_argument("--min_its", type=int, default=1, help="Minimum number of solver iterations")
-parser.add_argument("--max_its", type=int, default=100, help="Maximum number of solver iterations")
+parser.add_argument("--max_its", type=int, default=150, help="Maximum number of solver iterations")
 parser.add_argument("--Kic", type=float, default=100, help="Kic")
 parser.add_argument("--strength", type=float, default=100, help="Tensile strength at 0C")
 parser.add_argument("--n", type=float, default=3.0, help="Glens law exponent")
@@ -180,7 +180,7 @@ for i in range(1, args.nt):
         model.max_its = args.max_its
 
     
-    flag, nits = model.solve_timestep(save=False, stop_bottom=True)
+    flag, nits = model.solve_timestep(save=False, stop_bottom=False)
 
     failed = comm.allreduce(flag in (-1, 2), op=MPI.LOR)
     bottom_reached = comm.allreduce(flag in (3, 4), op=MPI.LOR)

@@ -69,7 +69,7 @@ d_bc = lambda V: [
 model = kr.base.Simulation(msh)
 model.tol = 5e-5
 model.min_its = 3
-model.max_its = 1300
+model.max_its = 500
 model.order = 1
 model.quad_degree = 4
 
